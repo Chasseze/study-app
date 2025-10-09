@@ -561,7 +561,7 @@ const App = () => {
         {/* Link Preview Pane */}
         {hasPreview && (
   <div style={{ 
-    width: '400px', 
+    width: '400px',
     backgroundColor: 'white', 
     display: 'flex', 
     flexDirection: 'column',
