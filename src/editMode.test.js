@@ -9,8 +9,8 @@ test('edit mode updates preview when typing', async () => {
   const editButton = screen.getByRole('button', { name: /edit/i });
   await userEvent.click(editButton);
 
-  // Type into the textarea
-  const textarea = screen.getByPlaceholderText(/write your notes here/i);
+  // Type into the textarea (use stable test id)
+  const textarea = screen.getByTestId('edit-textarea');
   await userEvent.clear(textarea);
   await userEvent.type(textarea, '# Hello Test');
 

@@ -224,8 +224,8 @@ const App = () => {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       backgroundColor: '#f8fafc'
     }}>
-      {/* Header - CENTERED TITLE */}
-      <header style={{
+  {/* Header - CENTERED TITLE */}
+  <header data-testid="app-header" style={{
         /* Nigeria flag slanted: green white green stripes (diagonal) */
         background: 'linear-gradient(135deg, #008751 0%, #008751 33%, #ffffff 33%, #ffffff 66%, #008751 66%, #008751 100%)',
         border: '3px solid #008751', // Nigeria green border
@@ -276,6 +276,7 @@ const App = () => {
         }}>
           <div style={{ padding: '1rem', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
             <button
+              data-testid="btn-new-topic"
               onClick={() => setShowNewTopicModal(true)}
               style={{
                 width: '100%',
@@ -516,7 +517,7 @@ const App = () => {
                           <LinkIcon /> Add Link
                         </button>
                       </div>
-                      <textarea
+                      <textarea data-testid="edit-textarea"
                         value={editContent}
                         onChange={(e) => setEditContent(e.target.value)}
                         placeholder="Write your notes here... (Markdown supported)"
@@ -701,7 +702,7 @@ const App = () => {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
-            <button
+            <button data-testid="btn-create-topic"
               onClick={handleAddTopic}
               disabled={!newTopicTitle.trim()}
               style={{
