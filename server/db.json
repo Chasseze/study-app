@@ -1,0 +1,11 @@
+{
+  "topics": [
+    {
+      "id": 1,
+      "title": "Getting Started",
+      "category": "Tutorial",
+      "content": "# Welcome to Your Personal Study Note\n\nThis is your personal space for learning and note-taking.",
+      "lastModified": "2025-10-07T00:00:00.000Z"
+    }
+  ]
+}
