@@ -68,3 +68,35 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+
+## How to run locally
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Start the development server:
+
+```bash
+npm start
+```
+
+Open http://localhost:3000 in your browser.
+
+## How to run tests
+
+Run the test suite once (CI mode):
+
+```bash
+CI=true npm test -- --reporters=default
+```
+
+Or run in watch mode during development:
+
+```bash
+npm test
+```
+
+The repository includes a small set of unit and UI tests under `src/`.
