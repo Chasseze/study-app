@@ -766,6 +766,7 @@ const App = () => {
           </div>
           <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
             <button
+              data-testid="btn-add-image"
               onClick={handleAddImage}
               disabled={!imageUrl.trim()}
               style={{
