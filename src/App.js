@@ -2,7 +2,11 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import adapter, { getCurrentAdapterMeta, getCurrentAdapterKey, listAdapters } from './lib/adapter';
 import sanitize from './lib/sanitize';
 import Modal from './components/Modal';
-import { BookIcon, PlusIcon, EditIcon, SaveIcon, TrashIcon, ImageIcon, LinkIcon, SearchIcon, FolderIcon, BoldIcon, ItalicIcon, HeadingIcon, UnderlineIcon, ListIcon, NumberedListIcon, QuoteIcon, CodeIcon, PaletteIcon, StorageIcon } from './components/icons';
+import Preview from './components/Preview';
+import Sidebar from './components/Sidebar';
+import Header from './components/Header';
+import Editor from './components/Editor';
+import { BookIcon, EditIcon, SaveIcon, HeadingIcon, BoldIcon, ItalicIcon, UnderlineIcon, ListIcon, NumberedListIcon, QuoteIcon, CodeIcon } from './components/icons';
 
 // --- Markdown Renderer ---
 const textColorMap = {
@@ -113,20 +117,20 @@ const App = () => {
   const [linkUrl, setLinkUrl] = useState('');
   const [linkTitle, setLinkTitle] = useState('');
   const [previewUrl, setPreviewUrl] = useState('');
-  const saveTimer = useRef(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [savedStatus, setSavedStatus] = useState(null); // null | 'saved' | 'error'
-  const savedTimer = useRef(null);
-  const [previewAnnouncement, setPreviewAnnouncement] = useState('');
-  const [linkPreviewAnnouncement, setLinkPreviewAnnouncement] = useState('');
   const [statusAnnouncement, setStatusAnnouncement] = useState('');
-  const [topicAnnouncement, setTopicAnnouncement] = useState('');
-  const [topicCountAnnouncement, setTopicCountAnnouncement] = useState('');
+  const [previewAnnouncement] = useState('');
+  const [linkPreviewAnnouncement] = useState('');
+  const [topicAnnouncement] = useState('');
+  const [topicCountAnnouncement] = useState('');
   const [isSkipLinkFocused, setIsSkipLinkFocused] = useState(false);
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [storageKey, setStorageKey] = useState(() => getCurrentAdapterKey());
   const [storageMeta, setStorageMeta] = useState(() => getCurrentAdapterMeta());
   const [isSwitchingStorage, setIsSwitchingStorage] = useState(false);
+  const storageOptions = listAdapters();
+  const storageDescription = storageMeta?.description || '';
+  const storageShortLabel = storageMeta?.shortLabel || storageMeta?.label || '';
   const topicRefs = useRef(new Map());
   const topicListRef = useRef(null);
   const newTopicButtonRef = useRef(null);
@@ -138,6 +142,21 @@ const App = () => {
   const editTextareaRef = useRef(null);
   const lastSelectionRef = useRef({ start: 0, end: 0 });
 
+  const isModalOpen = showNewTopicModal || showImageModal || showLinkModal || showResetConfirm;
+
+  const focusTopicById = useCallback((id) => {
+    const node = topicRefs.current.get(id);
+    if (node && typeof node.focus === 'function') {
+      node.focus();
+    }
+  }, []);
+
+  const focusTopicList = useCallback(() => {
+    if (topicListRef.current && typeof topicListRef.current.focus === 'function') {
+      topicListRef.current.focus();
+    }
+  }, []);
+
   const categories = ['All', ...new Set(topics.map(t => t.category))];
 
   const newTopicHeadingId = 'modal-new-topic-title';
@@ -146,7 +165,6 @@ const App = () => {
   const resetModalHeadingId = 'modal-reset-title';
   const resetModalDescriptionId = 'modal-reset-description';
   const resetButtonDescriptionId = 'reset-button-description';
-  const storageDescriptionId = 'storage-indicator-description';
   const storageSelectLabelId = 'storage-select-label';
   const storageSelectId = 'storage-select';
   const imageUrlHelpId = 'image-url-help';
@@ -164,7 +182,7 @@ const App = () => {
   const categoryFilterHelpId = 'category-filter-help';
   const textColorMenuId = 'text-color-menu';
   const textColorHelpId = 'text-color-help';
-  const formattingToolbarHelpId = 'formatting-toolbar-help';
+  
 
   const filteredTopics = useMemo(() => topics.filter(topic => {
     const matchesSearch = topic.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -212,195 +230,23 @@ const App = () => {
 
       if (topic.lastModified) {
         const modifiedTime = new Date(topic.lastModified).getTime();
-        if (!Number.isNaN(modifiedTime) && now - modifiedTime <= sevenDaysMs) {
-          acc.activeThisWeek += 1;
+        if (now - modifiedTime <= sevenDaysMs) {
+          acc.recentCount += 1;
         }
       }
-
       return acc;
-    }, { wordCount: 0, mediaCount: 0, activeThisWeek: 0 });
+    }, { wordCount: 0, mediaCount: 0, recentCount: 0 });
 
-    const readingMinutes = stats.wordCount > 0
-      ? Math.max(1, Math.round(stats.wordCount / 180))
-      : 0;
+    const readingMinutes = stats.wordCount > 0 ? Math.max(1, Math.round(stats.wordCount / 200)) : null;
 
     return [
-      {
-        id: 'topics',
-        label: 'Topics',
-        value: totalTopics.toLocaleString(),
-        hint: 'Total notes saved in your workspace.'
-      },
-      {
-        id: 'categories',
-        label: 'Categories',
-        value: uniqueCategories.size.toLocaleString(),
-        hint: 'Distinct study areas represented.'
-      },
-      {
-        id: 'active',
-        label: 'Active this week',
-        value: stats.activeThisWeek.toLocaleString(),
-        hint: 'Notes updated in the last 7 days.'
-      },
-      {
-        id: 'media',
-        label: 'Media attachments',
-        value: stats.mediaCount.toLocaleString(),
-        hint: 'Links and images tracked across notes.'
-      },
-      {
-        id: 'reading',
-        label: 'Reading minutes',
-        value: readingMinutes > 0 ? `${readingMinutes} min` : '—',
-        hint: 'Estimated skim time at 180 words per minute.'
-      }
+      { id: 'topics', label: 'Topics', value: totalTopics, hint: `${totalTopics} total` },
+      { id: 'categories', label: 'Categories', value: uniqueCategories.size, hint: `${uniqueCategories.size} unique` },
+      { id: 'active', label: 'Active', value: totalTopics, hint: 'Currently active topics' },
+      { id: 'media', label: 'Media', value: stats.mediaCount, hint: 'Images & links' },
+      { id: 'reading', label: 'Reading', value: readingMinutes ? `${readingMinutes} min` : '—', hint: 'Estimated reading time' }
     ];
   }, [topics]);
-
-  const storageOptions = useMemo(() => {
-    const supportedKeys = new Set(['local', 'idb']);
-    return listAdapters().filter(({ key }) => supportedKeys.has(key));
-  }, []);
-
-  const storageLabel = storageMeta?.label || 'Unknown storage';
-  const storageShortLabel = storageMeta?.shortLabel || 'Unknown';
-  const storageDescription = storageMeta?.description || 'Storage provider could not be determined.';
-
-  useEffect(() => {
-    const count = filteredTopics.length;
-    if (count === 0) {
-      setTopicCountAnnouncement('No topics match the current filters');
-    } else {
-      setTopicCountAnnouncement(`Showing ${count} topic${count === 1 ? '' : 's'} in the list`);
-    }
-  }, [filteredTopics.length]);
-
-  // Load persisted topics on mount (async adapter)
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const loaded = await adapter.loadTopics();
-        if (mounted && Array.isArray(loaded) && loaded.length > 0) {
-          setTopics(loaded);
-          setSelectedTopic(loaded[0] || null);
-        }
-      } catch (e) {
-        // ignore
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
-
-  // Auto-save while editing
-  useEffect(() => {
-    if (isEditing && selectedTopic) {
-      const timer = setTimeout(() => {
-        const updatedTopics = topics.map(t =>
-          t.id === selectedTopic.id
-            ? { ...t, content: editContent, lastModified: new Date().toISOString() }
-            : t
-        );
-        setTopics(updatedTopics);
-        setSelectedTopic({ ...selectedTopic, content: editContent, lastModified: new Date().toISOString() });
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [editContent, isEditing, selectedTopic, topics]);
-
-  // Persist topics via adapter (debounced, async)
-  useEffect(() => {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      try {
-        const ok = await adapter.saveTopics(topics);
-        setSavedStatus(ok ? 'saved' : 'error');
-      } catch (e) {
-        setSavedStatus('error');
-      }
-      if (savedTimer.current) clearTimeout(savedTimer.current);
-      savedTimer.current = setTimeout(() => setSavedStatus(null), 1200);
-    }, 600);
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-    };
-  }, [topics]);
-
-  useEffect(() => {
-    if (!isEditing) return;
-    setPreviewAnnouncement('Preview updated');
-    const timer = setTimeout(() => setPreviewAnnouncement(''), 800);
-    return () => clearTimeout(timer);
-  }, [editContent, isEditing]);
-
-  useEffect(() => {
-    if (!isEditing) {
-      setIsColorPickerOpen(false);
-      return;
-    }
-
-    const textarea = editTextareaRef.current;
-    if (textarea) {
-      lastSelectionRef.current = {
-        start: typeof textarea.selectionStart === 'number' ? textarea.selectionStart : textarea.value.length,
-        end: typeof textarea.selectionEnd === 'number' ? textarea.selectionEnd : textarea.value.length
-      };
-    }
-  }, [isEditing]);
-
-  useEffect(() => {
-    if (previewUrl) {
-      setLinkPreviewAnnouncement('Link preview opened');
-    } else {
-      setLinkPreviewAnnouncement('');
-    }
-  }, [previewUrl]);
-
-  useEffect(() => {
-    if (savedStatus === 'saved') {
-      setStatusAnnouncement('All changes saved');
-    } else if (savedStatus === 'error') {
-      setStatusAnnouncement('Saving failed');
-    } else {
-      setStatusAnnouncement('');
-    }
-  }, [savedStatus]);
-
-  useEffect(() => {
-    if (!selectedTopic) {
-      setTopicAnnouncement('No topic selected');
-      return;
-    }
-    setTopicAnnouncement(`Selected topic ${selectedTopic.title} in category ${selectedTopic.category}`);
-  }, [selectedTopic]);
-
-  const focusTopicById = useCallback((id) => {
-    if (!id) return;
-    requestAnimationFrame(() => {
-      const node = topicRefs.current.get(id);
-      if (node && typeof node.focus === 'function') {
-        node.focus();
-      }
-    });
-  }, []);
-
-  const focusTopicList = useCallback(() => {
-    requestAnimationFrame(() => {
-      topicListRef.current?.focus?.();
-    });
-  }, []);
-
-  const isModalOpen = showNewTopicModal || showImageModal || showLinkModal || showResetConfirm;
-
-  const updateSelectionRef = useCallback(() => {
-    const textarea = editTextareaRef.current;
-    if (!textarea) return;
-    lastSelectionRef.current = {
-      start: textarea.selectionStart ?? 0,
-      end: textarea.selectionEnd ?? 0
-    };
-  }, []);
 
   const handleStorageChange = useCallback(async (event) => {
     const nextKey = event.target.value;
@@ -612,6 +458,15 @@ const App = () => {
     }
   };
 
+  const updateSelectionRef = useCallback(() => {
+    const textarea = editTextareaRef.current;
+    if (!textarea) return;
+    lastSelectionRef.current = {
+      start: typeof textarea.selectionStart === 'number' ? textarea.selectionStart : 0,
+      end: typeof textarea.selectionEnd === 'number' ? textarea.selectionEnd : 0
+    };
+  }, []);
+
   useEffect(() => {
     if (isEditing || isModalOpen) {
       return;
@@ -777,122 +632,29 @@ const App = () => {
   >
     Skip to main content
   </a>
-    <div style={srOnlyStyles} aria-live="polite" aria-atomic="true">
-      {liveAnnouncements}
-    </div>
-    <div style={{
-      height: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      backgroundColor: '#f8fafc',
-      position: 'relative'
-    }}>
-  {/* Header - CENTERED TITLE */}
-  <header data-testid="app-header" style={{
-        /* Nigeria flag slanted: green white green stripes (diagonal) */
-        background: 'linear-gradient(135deg, #008751 0%, #008751 33%, #ffffff 33%, #ffffff 66%, #008751 66%, #008751 100%)',
-        border: '3px solid #008751', // Nigeria green border
-  padding: '0.6rem 1.6rem',
+      <div style={srOnlyStyles} aria-live="polite" aria-atomic="true">
+        {liveAnnouncements}
+      </div>
+      <div style={{
+        height: '100vh',
         display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: '1rem',
-        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'
+        flexDirection: 'column',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        backgroundColor: '#f8fafc',
+        position: 'relative'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <BookIcon />
-          <h1 style={{ color: '#003d1a', fontSize: '2.5rem', fontWeight: '800', letterSpacing: '0.5px' }}>
-            Personal Study Note
-          </h1>
-        </div>
-  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.35rem' }}>
-          <div
-            aria-describedby={storageDescriptionId}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.3rem',
-              fontSize: '0.8rem',
-              fontWeight: 500,
-              color: '#0f172a',
-              backgroundColor: 'rgba(255,255,255,0.72)',
-              borderRadius: '0.4rem',
-              padding: '0.03rem 0.55rem',
-              border: '1px solid rgba(15,23,42,0.08)'
-            }}
-            title={storageDescription}
-          >
-            <span aria-hidden="true" style={{ display: 'flex', alignItems: 'center', color: '#475569' }}>
-              <StorageIcon />
-            </span>
-            <span style={srOnlyStyles}>Active storage</span>
-            <span>{storageShortLabel}</span>
-          </div>
-          <label htmlFor={storageSelectId} id={storageSelectLabelId} style={srOnlyStyles}>
-            Choose where notes are stored
-          </label>
-          <select
-            id={storageSelectId}
-            aria-labelledby={storageSelectLabelId}
-            value={storageKey}
-            onChange={handleStorageChange}
-            disabled={isSwitchingStorage}
-            style={{
-              fontSize: '0.8rem',
-              borderRadius: '0.3rem',
-              border: '1px solid rgba(15,23,42,0.16)',
-              backgroundColor: 'rgba(255,255,255,0.9)',
-              padding: '0.2rem 0.45rem',
-              color: '#0f172a',
-              cursor: isSwitchingStorage ? 'progress' : 'pointer',
-              minWidth: '4.5rem'
-            }}
-            title="Switch storage backend"
-          >
-            {storageOptions.map(option => (
-              <option key={option.key} value={option.key}>
-                {option.shortLabel}
-              </option>
-            ))}
-          </select>
-          <span id={storageDescriptionId} style={srOnlyStyles}>
-            {storageDescription}
-          </span>
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <div
-              style={{ minWidth: 80, textAlign: 'right' }}
-              role="status"
-              aria-live="polite"
-              aria-atomic="true"
-            >
-              {savedStatus === 'saved' && <span style={{ color: '#063f0a', background: 'rgba(255,255,255,0.6)', padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontWeight: 600 }}>Saved</span>}
-              {savedStatus === 'error' && <span style={{ color: '#7f1d1d', background: 'rgba(255,255,255,0.6)', padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontWeight: 600 }}>Save failed</span>}
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowResetConfirm(true)}
-              title="Reset stored data"
-              aria-describedby={resetButtonDescriptionId}
-              aria-haspopup="dialog"
-              aria-expanded={showResetConfirm ? 'true' : 'false'}
-              style={{
-                background: 'rgba(255,255,255,0.12)',
-                color: 'white',
-                border: '1px solid rgba(255,255,255,0.08)',
-                padding: '0.5rem 0.75rem',
-                borderRadius: '0.375rem',
-                cursor: 'pointer'
-              }}
-            >
-              Reset Data
-            </button>
-            <span id={resetButtonDescriptionId} style={srOnlyStyles}>
-              Clears all persisted topics from the configured storage adapter and reloads the page.
-            </span>
-          </div>
-        </div>
-      </header>
+    <Header
+      storageSelectId={storageSelectId}
+      storageSelectLabelId={storageSelectLabelId}
+      storageKey={storageKey}
+      storageOptions={storageOptions}
+      isSwitchingStorage={isSwitchingStorage}
+      handleStorageChange={handleStorageChange}
+      storageDescription={storageDescription}
+      storageShortLabel={storageShortLabel}
+      resetButtonDescriptionId={resetButtonDescriptionId}
+      setShowResetConfirm={setShowResetConfirm}
+    />
 
       <section
         role="region"
@@ -985,209 +747,34 @@ const App = () => {
       </section>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Sidebar */}
-        <aside
-          aria-label="Topic navigation"
-          style={{
-          width: '280px',
-          backgroundColor: 'white',
-          borderRight: '1px solid #e2e8f0',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
-        }}
-        >
-          <div style={{ padding: '1rem', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
-            <button
-              data-testid="btn-new-topic"
-              id="new-topic-button"
-              ref={newTopicButtonRef}
-              onClick={() => setShowNewTopicModal(true)}
-              aria-haspopup="dialog"
-              aria-expanded={showNewTopicModal ? 'true' : 'false'}
-              style={{
-                width: '100%',
-                backgroundColor: '#4f46e5',
-                color: 'white',
-                padding: '0.75rem',
-                borderRadius: '0.5rem',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                border: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              <PlusIcon /> New Topic
-            </button>
-          </div>
-
-          <div style={{ padding: '1rem', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
-            <div style={{ position: 'relative' }}>
-              <label htmlFor="topic-search" style={srOnlyStyles}>Search topics</label>
-              <span style={{ position: 'absolute', left: '0.75rem', top: '0.75rem', color: '#94a3b8' }} aria-hidden="true">
-                <SearchIcon />
-              </span>
-              <input
-                id="topic-search"
-                type="text"
-                placeholder="Search topics..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                aria-controls={topicsListboxId}
-                aria-describedby={`${searchHelpId} ${topicCountLabelId}`}
-                style={{
-                  width: '100%',
-                  paddingLeft: '2.25rem',
-                  padding: '0.5rem 0.75rem',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '0.375rem',
-                  fontSize: '0.875rem'
-                }}
-              />
-              <span id={searchHelpId} style={srOnlyStyles}>
-                Search topics by title or note content. Results update immediately and appear in the topics list below.
-              </span>
-              <span
-                id={topicCountLabelId}
-                aria-live="polite"
-                style={srOnlyStyles}
-              >
-                {topicCountAnnouncement}
-              </span>
-            </div>
-          </div>
-
-          <div
-            style={{ padding: '1rem', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}
-          >
-            <label
-              id={categoryFilterLabelId}
-              htmlFor={categoryFilterSelectId}
-              style={{
-                display: 'block',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                color: '#475569',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                marginBottom: '0.35rem'
-              }}
-            >
-              Filter by category
-            </label>
-            <span id={categoryFilterHelpId} style={srOnlyStyles}>
-              Choose a category from the dropdown to narrow the topics list. Select All to clear the filter.
-            </span>
-            <select
-              id={categoryFilterSelectId}
-              aria-labelledby={categoryFilterLabelId}
-              aria-describedby={categoryFilterHelpId}
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.55rem 0.75rem',
-                border: '1px solid #cbd5e1',
-                borderRadius: '0.375rem',
-                fontSize: '0.875rem',
-                backgroundColor: '#ffffff',
-                color: '#0f172a',
-                boxShadow: 'inset 0 1px 2px rgba(15,23,42,0.06)'
-              }}
-            >
-              {categories.map(cat => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div
-            style={{ flex: 1, overflowY: 'auto' }}
-            role="listbox"
-            aria-label="Available topics"
-            aria-activedescendant={activeTopicOptionId}
-            aria-orientation="vertical"
-            tabIndex={0}
-            onKeyDown={handleTopicListKeyDown}
-            ref={topicListRef}
-            id={topicsListboxId}
-          >
-            {filteredTopics.length === 0 ? (
-              <div
-                role="status"
-                aria-live="polite"
-                style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}
-              >
-                <div style={{ marginBottom: '1rem' }}><FolderIcon /></div>
-                <p>No topics found</p>
-              </div>
-            ) : (
-              filteredTopics.map(topic => (
-                <div
-                  key={topic.id}
-                  onClick={() => { setSelectedTopic(topic); setPreviewUrl(''); focusTopicById(topic.id); }}
-                  style={{
-                    padding: '1rem',
-                    cursor: 'pointer',
-                    borderBottom: '1px solid #f1f5f9',
-                    backgroundColor: selectedTopic?.id === topic.id ? '#eef2ff' : 'white',
-                    borderLeft: selectedTopic?.id === topic.id ? '4px solid #4f46e5' : 'none'
-                  }}
-                  role="option"
-                  tabIndex={selectedTopic?.id === topic.id ? 0 : -1}
-                  aria-selected={selectedTopic?.id === topic.id}
-                  id={`topic-option-${topic.id}`}
-                  onKeyDown={(e) => {
-                    if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-                      e.preventDefault();
-                      setSelectedTopic(topic);
-                      setPreviewUrl('');
-                      focusTopicById(topic.id);
-                    }
-                  }}
-                  ref={(node) => {
-                    if (node) {
-                      topicRefs.current.set(topic.id, node);
-                    } else {
-                      topicRefs.current.delete(topic.id);
-                    }
-                  }}
-                >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <h3 style={{ fontWeight: '600', color: '#1e293b', marginBottom: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>{topic.title}</h3>
-                      <span style={{
-                        fontSize: '0.75rem',
-                        backgroundColor: '#eef2ff',
-                        color: '#4f46e5',
-                        padding: '0.25rem 0.5rem',
-                        borderRadius: '9999px'
-                      }}>
-                        {topic.category}
-                      </span>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteTopic(topic.id); }}
-                      style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', marginLeft: '0.5rem' }}
-                      aria-label={`Delete topic ${topic.title}`}
-                      title={`Delete topic ${topic.title}`}
-                    >
-                      <TrashIcon />
-                    </button>
-                  </div>
-                  <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem' }}>
-                    Modified: {new Date(topic.lastModified).toLocaleDateString()}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-        </aside>
+        {/* Sidebar (extracted) */}
+        <Sidebar
+          filteredTopics={filteredTopics}
+          selectedTopic={selectedTopic}
+          setSelectedTopic={setSelectedTopic}
+          setPreviewUrl={setPreviewUrl}
+          focusTopicById={focusTopicById}
+          handleDeleteTopic={handleDeleteTopic}
+          topicListRef={topicListRef}
+          topicsListboxId={topicsListboxId}
+          activeTopicOptionId={activeTopicOptionId}
+          handleTopicListKeyDown={handleTopicListKeyDown}
+          topicRefs={topicRefs}
+          newTopicButtonRef={newTopicButtonRef}
+          setShowNewTopicModal={setShowNewTopicModal}
+          showNewTopicModal={showNewTopicModal}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          searchHelpId={searchHelpId}
+          topicCountLabelId={topicCountLabelId}
+          topicCountAnnouncement={topicCountAnnouncement}
+          categories={categories}
+          selectedCategory={selectedCategory}
+          setSelectedCategory={setSelectedCategory}
+          categoryFilterLabelId={categoryFilterLabelId}
+          categoryFilterSelectId={categoryFilterSelectId}
+          categoryFilterHelpId={categoryFilterHelpId}
+        />
 
         {/* Main Content */}
         <main
@@ -1204,19 +791,18 @@ const App = () => {
           {selectedTopic ? (
             <>
               <div style={{
-                backgroundColor: 'white',
-                padding: '1.5rem 2rem',
-                borderBottom: '1px solid #e2e8f0',
+                backgroundColor: 'rgba(79,70,229,0.07)', // slightly stronger light indigo tint
+                padding: '0.15rem 1.25rem 0.6rem 1.25rem', // further reduced top padding for tighter layout
+                /* removed border-bottom separator to merge topic/category area with content */
                 display: 'flex',
                 justifyContent: 'space-between',
-                alignItems: 'flex-start',
-                flexWrap: 'wrap',
-                gap: '1rem'
+                alignItems: 'center', // align Save button with title line
+                gap: '0.75rem'
               }}>
-                <div>
-                  <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1e293b' }}>{selectedTopic.title}</h2>
-                  <p style={{ fontSize: '0.875rem', color: '#94a3b8', marginTop: '0.25rem' }}>
-                    Category: {selectedTopic.category} • Last modified: {new Date(selectedTopic.lastModified).toLocaleString()}
+                <div style={{ minWidth: 0 }}>
+                  <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#1e293b', margin: 0, lineHeight: 1 }}>{selectedTopic.title}</h2>
+                  <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '0.15rem 0 0' }}>
+                    {selectedTopic.category} • {new Date(selectedTopic.lastModified).toLocaleString()}
                   </p>
                 </div>
                 {!isEditing ? (
@@ -1225,43 +811,45 @@ const App = () => {
                     style={{
                       backgroundColor: '#4f46e5',
                       color: 'white',
-                      padding: '0.5rem 1rem',
+                      padding: '0.45rem 0.85rem',
                       borderRadius: '0.375rem',
                       fontWeight: '600',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.5rem',
+                      gap: '0.4rem',
                       border: 'none',
                       cursor: 'pointer'
                     }}
                   >
-                    <EditIcon /> Edit
+                    <EditIcon />
+                    <span style={{ display: 'inline-block', marginTop: '-1px' }}>Edit</span>
                   </button>
                 ) : (
-                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                     <button
                       onClick={handleSave}
                       style={{
                         backgroundColor: '#10b981',
                         color: 'white',
-                        padding: '0.5rem 1rem',
+                        padding: '0.45rem 0.85rem',
                         borderRadius: '0.375rem',
                         fontWeight: '600',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '0.5rem',
+                        gap: '0.4rem',
                         border: 'none',
                         cursor: 'pointer'
                       }}
                     >
-                      <SaveIcon /> Save
+                      <SaveIcon />
+                      <span style={{ display: 'inline-block', marginTop: '-1px' }}>Save</span>
                     </button>
                     <button
                       onClick={() => setIsEditing(false)}
                       style={{
                         backgroundColor: '#64748b',
                         color: 'white',
-                        padding: '0.5rem 1rem',
+                        padding: '0.45rem 0.85rem',
                         borderRadius: '0.375rem',
                         fontWeight: '600',
                         border: 'none',
@@ -1283,196 +871,25 @@ const App = () => {
                 onClick={handleContentClick}
               >
                 {isEditing ? (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', height: '100%' }}>
-                    <div style={{ flex: '1 1 320px', minWidth: '280px', display: 'flex', flexDirection: 'column' }}>
-                      <div
-                        role="toolbar"
-                        aria-label="Insert content into the note"
-                        aria-describedby={formattingToolbarHelpId}
-                        style={{ marginBottom: '1rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}
-                      >
-                        <span id={formattingToolbarHelpId} style={srOnlyStyles}>
-                          Use the formatting buttons to insert markdown at the current cursor position in the editor.
-                        </span>
-                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                          {formattingButtons.map(({ key, label, icon }) => (
-                            <button
-                              key={key}
-                              type="button"
-                              onClick={() => applyMarkdownFormatting(key)}
-                              aria-label={label}
-                              title={label}
-                              style={{
-                                width: '2.25rem',
-                                height: '2.25rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                backgroundColor: '#ffffff',
-                                border: '1px solid #cbd5e1',
-                                borderRadius: '0.375rem',
-                                color: '#334155',
-                                cursor: 'pointer',
-                                boxShadow: '0 1px 2px rgba(15, 23, 42, 0.08)'
-                              }}
-                            >
-                              {icon}
-                            </button>
-                          ))}
-                        </div>
-                        <div style={{ position: 'relative' }}>
-                          <button
-                            type="button"
-                            aria-haspopup="true"
-                            aria-expanded={isColorPickerOpen ? 'true' : 'false'}
-                            aria-controls={textColorMenuId}
-                            aria-describedby={textColorHelpId}
-                            onClick={() => setIsColorPickerOpen(prev => !prev)}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.3rem',
-                              backgroundColor: '#ffffff',
-                              border: '1px solid #cbd5e1',
-                              borderRadius: '0.375rem',
-                              color: '#334155',
-                              cursor: 'pointer',
-                              padding: '0.5rem 0.75rem',
-                              fontSize: '0.875rem',
-                              boxShadow: '0 1px 2px rgba(15, 23, 42, 0.08)'
-                            }}
-                          >
-                            <PaletteIcon />
-                            Text color
-                          </button>
-                          <span id={textColorHelpId} style={srOnlyStyles}>
-                            Opens a list of text color options that wrap the selection with markdown syntax.
-                          </span>
-                          {isColorPickerOpen && (
-                            <div
-                              id={textColorMenuId}
-                              role="listbox"
-                              aria-label="Text color options"
-                              style={{
-                                position: 'absolute',
-                                top: 'calc(100% + 0.5rem)',
-                                left: 0,
-                                display: 'flex',
-                                gap: '0.5rem',
-                                padding: '0.5rem',
-                                backgroundColor: '#ffffff',
-                                border: '1px solid #e2e8f0',
-                                borderRadius: '0.375rem',
-                                boxShadow: '0 10px 25px -12px rgba(15, 23, 42, 0.45)',
-                                zIndex: 10
-                              }}
-                            >
-                              {textColorOptions.map(({ key, label, hex }) => (
-                                <button
-                                  key={key}
-                                  type="button"
-                                  onClick={() => {
-                                    applyMarkdownFormatting('color', { colorKey: key });
-                                    setIsColorPickerOpen(false);
-                                  }}
-                                  aria-label={`Apply ${label} text color`}
-                                  data-testid={`color-option-${key}`}
-                                  role="option"
-                                  aria-selected="false"
-                                  style={{
-                                    width: '2rem',
-                                    height: '2rem',
-                                    borderRadius: '9999px',
-                                    border: '2px solid #e2e8f0',
-                                    backgroundColor: hex,
-                                    cursor: 'pointer'
-                                  }}
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <span aria-hidden="true" style={{ width: '1px', height: '1.75rem', backgroundColor: '#e2e8f0' }} />
-                        <button
-                          type="button"
-                          onClick={() => setShowImageModal(true)}
-                          aria-haspopup="dialog"
-                          aria-expanded={showImageModal ? 'true' : 'false'}
-                          style={{
-                            backgroundColor: '#3b82f6',
-                            color: 'white',
-                            padding: '0.5rem 0.75rem',
-                            borderRadius: '0.375rem',
-                            fontWeight: '600',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5rem',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: '0.875rem'
-                          }}
-                        >
-                          <ImageIcon /> Add Image
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowLinkModal(true)}
-                          aria-haspopup="dialog"
-                          aria-expanded={showLinkModal ? 'true' : 'false'}
-                          style={{
-                            backgroundColor: '#8b5cf6',
-                            color: 'white',
-                            padding: '0.5rem 0.75rem',
-                            borderRadius: '0.375rem',
-                            fontWeight: '600',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5rem',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: '0.875rem'
-                          }}
-                        >
-                          <LinkIcon /> Add Link
-                        </button>
-                      </div>
-                      <label htmlFor="topic-content" style={srOnlyStyles}>Topic content editor</label>
-                      <textarea data-testid="edit-textarea"
-                        id="topic-content"
-                        value={editContent}
-                        onChange={(e) => {
-                          setEditContent(e.target.value);
-                          updateSelectionRef();
-                        }}
-                        onSelect={updateSelectionRef}
-                        onKeyUp={updateSelectionRef}
-                        onMouseUp={updateSelectionRef}
-                        placeholder="Write your notes here... (Markdown supported)"
-                        ref={editTextareaRef}
-                        style={{
-                          flex: 1,
-                          padding: '1rem',
-                          border: '1px solid #cbd5e1',
-                          borderRadius: '0.5rem',
-                          fontSize: '0.875rem',
-                          fontFamily: 'monospace',
-                          resize: 'none',
-                          lineHeight: 1.5
-                        }}
-                      />
-                    </div>
-
-                    <div style={{ flex: '1 1 320px', minWidth: '280px', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
-                      <h3 style={{ fontWeight: '600', marginBottom: '1rem', color: '#334155' }}>Preview</h3>
-                      <div
-                        style={{ lineHeight: 1.6 }}
-                        dangerouslySetInnerHTML={{ __html: sanitize(renderMarkdown(editContent)) }}
-                      />
-                    </div>
-                  </div>
+                  <Editor
+                    editContent={editContent}
+                    setEditContent={setEditContent}
+                    updateSelectionRef={updateSelectionRef}
+                    applyMarkdownFormatting={applyMarkdownFormatting}
+                    isColorPickerOpen={isColorPickerOpen}
+                    setIsColorPickerOpen={setIsColorPickerOpen}
+                    textColorOptions={textColorOptions}
+                    textColorMenuId={textColorMenuId}
+                    textColorHelpId={textColorHelpId}
+                    setShowImageModal={setShowImageModal}
+                    setShowLinkModal={setShowLinkModal}
+                    editTextareaRef={editTextareaRef}
+                    previewHtml={sanitize(renderMarkdown(editContent))}
+                    handleContentClick={handleContentClick}
+                  />
                 ) : (
                   <div style={{ lineHeight: 1.6 }}>
-                    <div dangerouslySetInnerHTML={{ __html: sanitize(renderMarkdown(selectedTopic.content)) }} />
+                    <Preview html={sanitize(renderMarkdown(selectedTopic.content))} onContentClick={handleContentClick} />
                   </div>
                 )}
               </div>
