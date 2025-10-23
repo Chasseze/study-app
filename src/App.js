@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import adapter, { getCurrentAdapterMeta, getCurrentAdapterKey, listAdapters } from './lib/adapter';
+import sanitize from './lib/sanitize';
 import Modal from './components/Modal';
 import { BookIcon, PlusIcon, EditIcon, SaveIcon, TrashIcon, ImageIcon, LinkIcon, SearchIcon, FolderIcon, BoldIcon, ItalicIcon, HeadingIcon, UnderlineIcon, ListIcon, NumberedListIcon, QuoteIcon, CodeIcon, PaletteIcon, StorageIcon } from './components/icons';
 
@@ -762,8 +763,23 @@ const App = () => {
   const liveAnnouncements = [previewAnnouncement, linkPreviewAnnouncement, statusAnnouncement, topicAnnouncement, topicCountAnnouncement]
     .filter(Boolean)
     .join(' ');
-
   return (
+    <>
+    <a
+    href="#main-content"
+    onFocus={() => setIsSkipLinkFocused(true)}
+    onBlur={() => setIsSkipLinkFocused(false)}
+    style={{
+      ...skipLinkBaseStyles,
+      transform: isSkipLinkFocused ? 'translateY(0)' : skipLinkBaseStyles.transform,
+      boxShadow: isSkipLinkFocused ? '0 18px 32px -18px rgba(15,23,42,0.55)' : 'none'
+    }}
+  >
+    Skip to main content
+  </a>
+    <div style={srOnlyStyles} aria-live="polite" aria-atomic="true">
+      {liveAnnouncements}
+    </div>
     <div style={{
       height: '100vh',
       display: 'flex',
@@ -772,21 +788,6 @@ const App = () => {
       backgroundColor: '#f8fafc',
       position: 'relative'
     }}>
-      <a
-        href="#main-content"
-        onFocus={() => setIsSkipLinkFocused(true)}
-        onBlur={() => setIsSkipLinkFocused(false)}
-        style={{
-          ...skipLinkBaseStyles,
-          transform: isSkipLinkFocused ? 'translateY(0)' : skipLinkBaseStyles.transform,
-          boxShadow: isSkipLinkFocused ? '0 18px 32px -18px rgba(15,23,42,0.55)' : 'none'
-        }}
-      >
-        Skip to main content
-      </a>
-      <div style={srOnlyStyles} aria-live="polite" aria-atomic="true">
-        {liveAnnouncements}
-      </div>
   {/* Header - CENTERED TITLE */}
   <header data-testid="app-header" style={{
         /* Nigeria flag slanted: green white green stripes (diagonal) */
@@ -1465,13 +1466,13 @@ const App = () => {
                       <h3 style={{ fontWeight: '600', marginBottom: '1rem', color: '#334155' }}>Preview</h3>
                       <div
                         style={{ lineHeight: 1.6 }}
-                        dangerouslySetInnerHTML={{ __html: renderMarkdown(editContent) }}
+                        dangerouslySetInnerHTML={{ __html: sanitize(renderMarkdown(editContent)) }}
                       />
                     </div>
                   </div>
                 ) : (
                   <div style={{ lineHeight: 1.6 }}>
-                    <div dangerouslySetInnerHTML={{ __html: renderMarkdown(selectedTopic.content) }} />
+                    <div dangerouslySetInnerHTML={{ __html: sanitize(renderMarkdown(selectedTopic.content)) }} />
                   </div>
                 )}
               </div>
@@ -1892,6 +1893,7 @@ const App = () => {
         </Modal>
       )}
     </div>
+    </>
   );
 };
 
