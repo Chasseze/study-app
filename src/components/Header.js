@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { BookIcon, StorageIcon } from './icons';
+import Modal from './Modal';
+import { isConfigured, onAuthChange, signInWithGoogle, signOut } from '../lib/firebaseClient';
 
 export default function Header({
   storageSelectId,
@@ -13,6 +15,21 @@ export default function Header({
   resetButtonDescriptionId,
   setShowResetConfirm
 }) {
+  const [user, setUser] = useState(null);
+  const firebaseEnabled = isConfigured();
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const emailRef = useRef(null);
+  const passwordRef = useRef(null);
+
+  useEffect(() => {
+    const unsub = onAuthChange((u) => {
+      setUser(u);
+    });
+    return () => unsub && unsub();
+  }, []);
   return (
     <header data-testid="app-header" style={{
       background: 'linear-gradient(135deg, #008751 0%, #008751 33%, #ffffff 33%, #ffffff 66%, #008751 66%, #008751 100%)',
@@ -82,7 +99,113 @@ export default function Header({
         </select>
 
           <div style={{ display: 'flex', gap: '0.18rem', alignItems: 'center' }}>
+            {firebaseEnabled && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: '0.5rem', marginLeft: '1.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div
+                    style={{ width: 10, height: 10, borderRadius: 999, background: user ? '#10b981' : 'transparent', border: user ? 'none' : '1px solid #94a3b8' }}
+                    title={user ? (user.email || `UID: ${user.uid}`) : 'Not signed in'}
+                    role="img"
+                    aria-label={user ? `Signed in as ${user.email || `UID: ${user.uid}`}` : 'Not signed in'}
+                  />
+                  <div style={{ fontSize: '0.75rem', color: '#07121a' }}>
+                    {user ? (user.email || `UID:${user.uid}`) : 'Not signed in'}
+                  </div>
+                </div>
+                <div>
+                  {!user ? (
+                    <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                      <button
+                        onClick={() => signInWithGoogle().catch(() => {})}
+                        style={{ fontSize: '0.72rem', padding: '0.2rem 0.4rem', borderRadius: '0.25rem', border: '1px solid rgba(7,18,26,0.06)', background: '#fff', cursor: 'pointer' }}
+                      >
+                        Sign in
+                      </button>
+                      <button
+                        onClick={() => setShowEmailForm(true)}
+                        style={{ fontSize: '0.72rem', padding: '0.2rem 0.4rem', borderRadius: '0.25rem', border: '1px solid rgba(7,18,26,0.06)', background: '#fff', cursor: 'pointer' }}
+                      >
+                        Email
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => signOut().catch(() => {})}
+                      style={{ fontSize: '0.72rem', padding: '0.2rem 0.4rem', borderRadius: '0.25rem', border: '1px solid rgba(7,18,26,0.06)', background: '#fff', cursor: 'pointer' }}
+                    >
+                      Sign out
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
             <div style={{ minWidth: 48, textAlign: 'right' }} role="status" aria-live="polite" aria-atomic="true">{/** placeholder for saved status **/}</div>
+            {showEmailForm && (
+              <Modal onClose={() => setShowEmailForm(false)} labelledBy="email-auth-heading" initialFocusRef={emailRef}>
+                <h2 id="email-auth-heading" style={{ margin: 0, marginBottom: '0.75rem', fontSize: '1.125rem', fontWeight: 700 }}>Sign in with email</h2>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <input
+                    id="email-auth-email"
+                    name="email"
+                    ref={emailRef}
+                    type="email"
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    defaultValue={email}
+                    style={{ padding: '0.5rem', borderRadius: '0.375rem', border: '1px solid rgba(7,18,26,0.08)' }}
+                  />
+                  <input
+                    id="email-auth-password"
+                    name="password"
+                    ref={passwordRef}
+                    type="password"
+                    placeholder="password"
+                    autoComplete="new-password"
+                    defaultValue={password}
+                    style={{ padding: '0.5rem', borderRadius: '0.375rem', border: '1px solid rgba(7,18,26,0.08)' }}
+                  />
+                  {emailError && <div style={{ color: '#ef4444' }}>{emailError}</div>}
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      onClick={() => {
+                          import('../lib/firebaseClient').then(async (mod) => {
+                            setEmailError('');
+                            const e = emailRef.current ? emailRef.current.value.trim() : '';
+                            const p = passwordRef.current ? passwordRef.current.value : '';
+                            if (!e || !p) {
+                              setEmailError('Please enter email and password');
+                              return;
+                            }
+                            try {
+                              await mod.signInWithEmail(e, p);
+                            } catch (err) {
+                              // Try create account; surface error messages so users know why it failed
+                              try {
+                                await mod.createUserWithEmail(e, p);
+                              } catch (err2) {
+                                console.warn('Email auth failed', err, err2);
+                                // prefer err2 message if present
+                                setEmailError((err2 && err2.message) || (err && err.message) || 'Sign in failed');
+                                return;
+                              }
+                            }
+                            if (emailRef.current) emailRef.current.value = '';
+                            if (passwordRef.current) passwordRef.current.value = '';
+                            setEmail(''); setPassword(''); setEmailError(''); setShowEmailForm(false);
+                          }).catch((dynamicErr) => {
+                            console.warn('Failed to load firebaseClient', dynamicErr);
+                            setEmailError('Authentication unavailable');
+                          });
+                        }}
+                      style={{ padding: '0.5rem 0.75rem', borderRadius: '0.375rem', background: '#4f46e5', color: 'white', border: 'none' }}
+                    >
+                      Sign in / Create
+                    </button>
+                    <button onClick={() => setShowEmailForm(false)} style={{ padding: '0.5rem 0.75rem', borderRadius: '0.375rem', background: '#e2e8f0', border: 'none' }}>Cancel</button>
+                  </div>
+                </div>
+              </Modal>
+            )}
             <button
               type="button"
               onClick={() => setShowResetConfirm(true)}

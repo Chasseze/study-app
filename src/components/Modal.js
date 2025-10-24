@@ -54,11 +54,14 @@ const Modal = ({ children, onClose, labelledBy, describedBy, initialFocusRef }) 
       return false;
     };
 
-    if (!tryInitialFocus()) {
-      if (first) {
-        first.focus();
-      } else {
-        container.focus();
+    // If something inside the modal already has focus, don't steal it.
+    if (!container.contains(document.activeElement)) {
+      if (!tryInitialFocus()) {
+        if (first) {
+          first.focus();
+        } else {
+          container.focus();
+        }
       }
     }
 

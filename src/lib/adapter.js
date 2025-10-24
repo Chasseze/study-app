@@ -1,6 +1,7 @@
 import local from './storage';
 import api from './apiStorage';
 import idb from './idbStorage';
+import firebase from './firebaseSdkStorage';
 
 const DEFAULT_SOURCE = (process.env.REACT_APP_STORAGE || 'local').toLowerCase();
 
@@ -23,6 +24,13 @@ const adapterMeta = {
     shortLabel: 'API',
     description: 'Notes sync with the configured API service.'
   }
+  ,
+  firebase: {
+    key: 'firebase',
+    label: 'Firebase',
+    shortLabel: 'FB',
+    description: 'Sync notes to a Firebase Realtime Database (via REST). Set REACT_APP_FIREBASE_DB_URL to enable.'
+  }
 };
 
 function normalizeKey(name) {
@@ -33,6 +41,7 @@ function getAdapter(name) {
   switch (normalizeKey(name)) {
     case 'api': return api;
     case 'idb': return idb;
+    case 'firebase': return firebase;
     case 'local':
     default:
       return local;
