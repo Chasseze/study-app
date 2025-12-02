@@ -12,78 +12,89 @@ const textColorMap = {
 };
 
 // Configure marked with custom renderer
-const renderer = new marked.Renderer();
+// Note: marked v17+ uses object parameters for renderer methods
+const renderer = {
+  // Custom heading renderer with inline styles
+  heading({ tokens, depth }) {
+    const text = this.parser.parseInline(tokens);
+    const styles = {
+      1: 'font-size: 1.875rem; font-weight: 700; margin-top: 1.5rem; margin-bottom: 1rem; color: #1e293b;',
+      2: 'font-size: 1.5rem; font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.75rem; color: #1e293b;',
+      3: 'font-size: 1.25rem; font-weight: 700; margin-top: 1rem; margin-bottom: 0.5rem; color: #334155;',
+      4: 'font-size: 1.125rem; font-weight: 600; margin-top: 0.75rem; margin-bottom: 0.5rem; color: #334155;',
+      5: 'font-size: 1rem; font-weight: 600; margin-top: 0.5rem; margin-bottom: 0.25rem; color: #475569;',
+      6: 'font-size: 0.875rem; font-weight: 600; margin-top: 0.5rem; margin-bottom: 0.25rem; color: #475569;'
+    };
+    return `<h${depth} style="${styles[depth] || ''}">${text}</h${depth}>\n`;
+  },
 
-// Custom heading renderer with inline styles
-renderer.heading = (text, level) => {
-  const styles = {
-    1: 'font-size: 1.875rem; font-weight: 700; margin-top: 1.5rem; margin-bottom: 1rem; color: #1e293b;',
-    2: 'font-size: 1.5rem; font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.75rem; color: #1e293b;',
-    3: 'font-size: 1.25rem; font-weight: 700; margin-top: 1rem; margin-bottom: 0.5rem; color: #334155;',
-    4: 'font-size: 1.125rem; font-weight: 600; margin-top: 0.75rem; margin-bottom: 0.5rem; color: #334155;',
-    5: 'font-size: 1rem; font-weight: 600; margin-top: 0.5rem; margin-bottom: 0.25rem; color: #475569;',
-    6: 'font-size: 0.875rem; font-weight: 600; margin-top: 0.5rem; margin-bottom: 0.25rem; color: #475569;'
-  };
-  return `<h${level} style="${styles[level] || ''}">${text}</h${level}>`;
+  // Custom paragraph renderer
+  paragraph({ tokens }) {
+    const text = this.parser.parseInline(tokens);
+    return `<p style="margin-bottom: 1rem; line-height: 1.6; color: #334155;">${text}</p>\n`;
+  },
+
+  // Custom strong (bold) renderer
+  strong({ tokens }) {
+    const text = this.parser.parseInline(tokens);
+    return `<strong style="font-weight: 600; color: #1e293b;">${text}</strong>`;
+  },
+
+  // Custom emphasis (italic) renderer
+  em({ tokens }) {
+    const text = this.parser.parseInline(tokens);
+    return `<em style="font-style: italic;">${text}</em>`;
+  },
+
+  // Custom image renderer
+  image({ href, title, text }) {
+    const titleAttr = title ? ` title="${title}"` : '';
+    return `<img src="${href}" alt="${text}"${titleAttr} style="max-width: 100%; height: auto; border-radius: 0.5rem; margin: 1rem 0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"/>`;
+  },
+
+  // Custom link renderer
+  link({ href, title, tokens }) {
+    const text = this.parser.parseInline(tokens);
+    const titleAttr = title ? ` title="${title}"` : '';
+    return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer" style="color: #4f46e5; text-decoration: underline; font-weight: 500;">${text}</a>`;
+  },
+
+  // Custom list renderer
+  list({ ordered, items }) {
+    const tag = ordered ? 'ol' : 'ul';
+    const listStyle = ordered ? 'list-style-type: decimal;' : 'list-style-type: disc;';
+    const body = items.map(item => this.listitem(item)).join('');
+    return `<${tag} style="${listStyle} margin-left: 1.5rem; margin: 1rem 0; padding-left: 0.5rem;">${body}</${tag}>\n`;
+  },
+
+  // Custom list item renderer
+  listitem({ tokens }) {
+    const text = this.parser.parse(tokens, !!this.options?.mangle);
+    return `<li style="margin-bottom: 0.25rem; color: #475569;">${text}</li>\n`;
+  },
+
+  // Custom code renderer (inline)
+  codespan({ text }) {
+    return `<code style="background-color: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.875em; font-family: monospace; color: #334155;">${text}</code>`;
+  },
+
+  // Custom code block renderer
+  code({ text, lang }) {
+    return `<pre style="background-color: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin: 1rem 0;"><code>${text}</code></pre>\n`;
+  },
+
+  // Custom blockquote renderer
+  blockquote({ tokens }) {
+    const quote = this.parser.parse(tokens);
+    return `<blockquote style="border-left: 4px solid #94a3b8; padding-left: 1rem; margin: 1rem 0; color: #64748b; font-style: italic;">${quote}</blockquote>\n`;
+  }
 };
 
-// Custom paragraph renderer
-renderer.paragraph = (text) => {
-  return `<p style="margin-bottom: 1rem; line-height: 1.6; color: #334155;">${text}</p>`;
-};
-
-// Custom strong (bold) renderer
-renderer.strong = (text) => {
-  return `<strong style="font-weight: 600; color: #1e293b;">${text}</strong>`;
-};
-
-// Custom emphasis (italic) renderer
-renderer.em = (text) => {
-  return `<em style="font-style: italic;">${text}</em>`;
-};
-
-// Custom image renderer
-renderer.image = (href, title, text) => {
-  const titleAttr = title ? ` title="${title}"` : '';
-  return `<img src="${href}" alt="${text}"${titleAttr} style="max-width: 100%; height: auto; border-radius: 0.5rem; margin: 1rem 0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"/>`;
-};
-
-// Custom link renderer
-renderer.link = (href, title, text) => {
-  const titleAttr = title ? ` title="${title}"` : '';
-  return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer" style="color: #4f46e5; text-decoration: underline; font-weight: 500;">${text}</a>`;
-};
-
-// Custom list renderer
-renderer.list = (body, ordered) => {
-  const tag = ordered ? 'ol' : 'ul';
-  const listStyle = ordered ? 'list-style-type: decimal;' : 'list-style-type: disc;';
-  return `<${tag} style="${listStyle} margin-left: 1.5rem; margin: 1rem 0; padding-left: 0.5rem;">${body}</${tag}>`;
-};
-
-// Custom list item renderer
-renderer.listitem = (text) => {
-  return `<li style="margin-bottom: 0.25rem; color: #475569;">${text}</li>`;
-};
-
-// Custom code renderer (inline)
-renderer.codespan = (code) => {
-  return `<code style="background-color: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.875em; font-family: monospace; color: #334155;">${code}</code>`;
-};
-
-// Custom code block renderer
-renderer.code = (code, language) => {
-  return `<pre style="background-color: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin: 1rem 0;"><code>${code}</code></pre>`;
-};
-
-// Custom blockquote renderer
-renderer.blockquote = (quote) => {
-  return `<blockquote style="border-left: 4px solid #94a3b8; padding-left: 1rem; margin: 1rem 0; color: #64748b; font-style: italic;">${quote}</blockquote>`;
-};
+// Apply custom renderer
+marked.use({ renderer });
 
 // Configure marked options
 marked.setOptions({
-  renderer,
   breaks: true,
   gfm: true
 });
