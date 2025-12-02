@@ -6,7 +6,7 @@ import Preview from './components/Preview';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Editor from './components/Editor';
-import { BookIcon, EditIcon, SaveIcon, HeadingIcon, BoldIcon, ItalicIcon, UnderlineIcon, ListIcon, NumberedListIcon, QuoteIcon, CodeIcon } from './components/icons';
+import { BookIcon, EditIcon, SaveIcon } from './components/icons';
 
 // --- Markdown Renderer ---
 const textColorMap = {
@@ -193,17 +193,6 @@ const App = () => {
 
   const activeTopicOptionId = selectedTopic ? `topic-option-${selectedTopic.id}` : undefined;
 
-  const formattingButtons = useMemo(() => ([
-    { key: 'heading', label: 'Insert heading', icon: <HeadingIcon /> },
-    { key: 'bold', label: 'Bold', icon: <BoldIcon /> },
-    { key: 'italic', label: 'Italic', icon: <ItalicIcon /> },
-    { key: 'underline', label: 'Underline', icon: <UnderlineIcon /> },
-    { key: 'code', label: 'Inline code', icon: <CodeIcon /> },
-    { key: 'unordered-list', label: 'Bulleted list', icon: <ListIcon /> },
-    { key: 'ordered-list', label: 'Numbered list', icon: <NumberedListIcon /> },
-    { key: 'quote', label: 'Block quote', icon: <QuoteIcon /> }
-  ]), []);
-
   const textColorOptions = useMemo(() => ([
     { key: 'slate', label: 'Slate', hex: textColorMap.slate },
     { key: 'indigo', label: 'Indigo', hex: textColorMap.indigo },
@@ -225,7 +214,8 @@ const App = () => {
       const words = trimmed ? trimmed.split(/\s+/).length : 0;
       acc.wordCount += words;
 
-      const mediaMatches = content.match(/!\[[^\]]*\]\([^\)]+\)|\[[^\]]+\]\((?!#)[^\)]+\)/g);
+      // Match markdown images ![alt](url) and links [text](url), excluding fragment links (#anchor)
+      const mediaMatches = content.match(/!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\((?!#)[^)]+\)/g);
       acc.mediaCount += mediaMatches ? mediaMatches.length : 0;
 
       if (topic.lastModified) {
@@ -657,7 +647,6 @@ const App = () => {
     />
 
       <section
-        role="region"
         aria-label="Workspace insights"
         style={{
           background: 'linear-gradient(135deg, rgba(224,242,254,0.8), rgba(224,231,255,0.9))',
