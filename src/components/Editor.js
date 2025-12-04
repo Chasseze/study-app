@@ -66,7 +66,7 @@ export default function Editor({
               Opens a list of text color options that wrap the selection with markdown syntax.
             </span>
             {isColorPickerOpen && (
-              <div id={textColorMenuId} role="listbox" aria-label="Text color options" style={{ position: 'absolute', top: 'calc(100% + 0.5rem)', left: 0, display: 'flex', gap: '0.5rem', padding: '0.5rem', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '0.375rem', boxShadow: '0 10px 25px -12px rgba(15, 23, 42, 0.45)', zIndex: 10 }}>
+              <div id={textColorMenuId} role="listbox" aria-label="Text color options" style={{ position: 'absolute', top: 'calc(100% + 0.5rem)', left: 0, display: 'flex', gap: '0.5rem', padding: '0.5rem', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '0.375rem', boxShadow: 'var(--shadow-md)', zIndex: 10 }}>
                 {textColorOptions.map(({ key, label, hex }) => (
                   <button
                     key={key}
@@ -76,18 +76,18 @@ export default function Editor({
                     data-testid={`color-option-${key}`}
                     role="option"
                     aria-selected="false"
-                    style={{ width: '2rem', height: '2rem', borderRadius: '9999px', border: '2px solid #e2e8f0', backgroundColor: hex, cursor: 'pointer' }}
+                    style={{ width: '2rem', height: '2rem', borderRadius: '9999px', border: '2px solid var(--border-color)', backgroundColor: hex, cursor: 'pointer' }}
                   />
                 ))}
               </div>
             )}
           </div>
 
-          <span aria-hidden="true" style={{ width: '1px', height: '1.75rem', backgroundColor: '#e2e8f0' }} />
-          <button type="button" onClick={() => setShowImageModal(true)} style={{ backgroundColor: '#3b82f6', color: 'white', padding: '0.5rem 0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem' }}>
+          <span aria-hidden="true" style={{ width: '1px', height: '1.75rem', backgroundColor: 'var(--border-color)' }} />
+          <button type="button" onClick={() => setShowImageModal(true)} style={{ backgroundColor: 'var(--button-info)', color: 'white', padding: '0.5rem 0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem' }}>
             <ImageIcon /> Add Image
           </button>
-          <button type="button" onClick={() => setShowLinkModal(true)} style={{ backgroundColor: '#8b5cf6', color: 'white', padding: '0.5rem 0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem' }}>
+          <button type="button" onClick={() => setShowLinkModal(true)} style={{ backgroundColor: 'var(--button-primary)', color: 'white', padding: '0.5rem 0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem' }}>
             <LinkIcon /> Add Link
           </button>
         </div>
@@ -102,12 +102,12 @@ export default function Editor({
           onMouseUp={updateSelectionRef}
           placeholder="Write your notes here... (Markdown supported)"
           ref={editTextareaRef}
-          style={{ flex: 1, padding: '1rem', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.875rem', fontFamily: 'monospace', resize: 'none', lineHeight: 1.5 }}
+          style={{ flex: 1, padding: '1rem', border: '1px solid var(--border-color)', borderRadius: '0.5rem', fontSize: '0.875rem', fontFamily: 'monospace', resize: 'none', lineHeight: 1.5, backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
         />
       </div>
 
-      <div style={{ flex: '1 1 320px', minWidth: '280px', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
-        <h3 style={{ fontWeight: '600', marginBottom: '1rem', color: '#334155' }}>Preview</h3>
+      <div style={{ flex: '1 1 320px', minWidth: '280px', backgroundColor: 'var(--bg-tertiary)', padding: '1rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)' }}>
+        <h3 style={{ fontWeight: '600', marginBottom: '1rem', color: 'var(--text-secondary)' }}>Preview</h3>
         <Preview html={previewHtml} onContentClick={handleContentClick} />
       </div>
     </div>

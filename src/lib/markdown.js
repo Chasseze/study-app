@@ -102,9 +102,10 @@ marked.setOptions({
 /**
  * Render markdown to HTML with custom color syntax support and sanitization
  * @param {string} text - Markdown text to render
+ * @param {Array} topics - Optional array of topics for note linking
  * @returns {string} Sanitized HTML
  */
-export function renderMarkdown(text) {
+export function renderMarkdown(text, topics = []) {
   if (!text || !text.trim()) {
     return '<p style="color: #94a3b8; font-style: italic;">This note is empty. Start writing!</p>';
   }
@@ -119,6 +120,18 @@ export function renderMarkdown(text) {
     const normalizedKey = colorKey.toLowerCase();
     const hex = textColorMap[normalizedKey] || colorKey;
     return `<span style="color: ${hex};">${value}</span>`;
+  });
+
+  // Handle note linking syntax [[note title]]
+  processed = processed.replace(/\[\[(.+?)\]\]/g, (match, noteTitle) => {
+    const linkedTopic = topics.find(t => 
+      t.title.toLowerCase() === noteTitle.toLowerCase()
+    );
+    if (linkedTopic) {
+      return `<a href="#note-${linkedTopic.id}" class="note-link" data-note-id="${linkedTopic.id}" style="color: #7c3aed; text-decoration: none; background-color: #f5f3ff; padding: 0.1rem 0.4rem; border-radius: 0.25rem; font-weight: 500; cursor: pointer;">📝 ${noteTitle}</a>`;
+    }
+    // Note not found - show as broken link
+    return `<span style="color: #ef4444; text-decoration: line-through; opacity: 0.7;">[[${noteTitle}]]</span>`;
   });
 
   // Parse markdown with marked

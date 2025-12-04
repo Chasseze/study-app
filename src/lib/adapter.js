@@ -1,56 +1,44 @@
-import local from './storage';
-import api from './apiStorage';
 import idb from './idbStorage';
 import firebase from './firebaseSdkStorage';
 
-const DEFAULT_SOURCE = (process.env.REACT_APP_STORAGE || 'local').toLowerCase();
+const DEFAULT_SOURCE = (process.env.REACT_APP_STORAGE || 'firebase').toLowerCase();
 
 const adapterMeta = {
-  local: {
-    key: 'local',
-    label: 'Browser storage',
-    shortLabel: 'LL',
-    description: 'Notes are saved to this browser using localStorage.'
-  },
   idb: {
     key: 'idb',
     label: 'Offline storage',
     shortLabel: 'IDB',
-    description: 'Notes are stored locally using IndexedDB for larger datasets.'
+    description: 'Notes are stored locally using IndexedDB. Works offline but does not sync across devices.'
   },
-  api: {
-    key: 'api',
-    label: 'Remote API',
-    shortLabel: 'API',
-    description: 'Notes sync with the configured API service.'
-  }
-  ,
   firebase: {
     key: 'firebase',
-    label: 'Firebase',
+    label: 'Cloud sync',
     shortLabel: 'FB',
-    description: 'Sync notes to a Firebase Realtime Database (via REST). Set REACT_APP_FIREBASE_DB_URL to enable.'
+    description: 'Sync notes to Firebase cloud. Sign in to access your notes from any device.'
   }
 };
 
 function normalizeKey(name) {
-  return (name || DEFAULT_SOURCE).toLowerCase();
+  const key = (name || DEFAULT_SOURCE).toLowerCase();
+  // Only allow firebase or idb
+  if (key === 'firebase' || key === 'idb') {
+    return key;
+  }
+  return 'firebase'; // Default to firebase
 }
 
 function getAdapter(name) {
   switch (normalizeKey(name)) {
-    case 'api': return api;
     case 'idb': return idb;
-    case 'firebase': return firebase;
-    case 'local':
+    case 'firebase':
     default:
-      return local;
+      return firebase;
   }
 }
 
 function getAdapterMeta(name) {
   const key = normalizeKey(name);
-  return adapterMeta[key] || adapterMeta.local;
+  return adapterMeta[key] || adapterMeta.firebase;
 }
 
 export function listAdapters() {
@@ -76,12 +64,16 @@ export function getCurrentAdapterMeta() {
 export async function loadTopics() { return current.loadTopics ? await current.loadTopics() : null; }
 export async function saveTopics(topics) { return current.saveTopics ? await current.saveTopics(topics) : false; }
 export async function clearTopics() { return current.clearTopics ? await current.clearTopics() : false; }
+export function subscribeToChanges(callback) { 
+  return current.subscribeToChanges ? current.subscribeToChanges(callback) : () => {}; 
+}
 
 const adapterExport = {
   setAdapter,
   loadTopics,
   saveTopics,
   clearTopics,
+  subscribeToChanges,
   getCurrentAdapterKey,
   getCurrentAdapterMeta,
   listAdapters

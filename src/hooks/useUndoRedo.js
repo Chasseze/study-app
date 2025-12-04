@@ -44,17 +44,25 @@ export default function useUndoRedo(initialValue = '', limit = 50) {
     }, 500); // 500ms debounce
   }, [currentIndex, limit]);
 
+  // Undo returns the previous value directly
   const undo = useCallback(() => {
     if (canUndo) {
-      setCurrentIndex(prev => prev - 1);
+      const newIndex = currentIndex - 1;
+      setCurrentIndex(newIndex);
+      return history[newIndex];
     }
-  }, [canUndo]);
+    return currentValue;
+  }, [canUndo, currentIndex, history, currentValue]);
 
+  // Redo returns the next value directly
   const redo = useCallback(() => {
     if (canRedo) {
-      setCurrentIndex(prev => prev + 1);
+      const newIndex = currentIndex + 1;
+      setCurrentIndex(newIndex);
+      return history[newIndex];
     }
-  }, [canRedo]);
+    return currentValue;
+  }, [canRedo, currentIndex, history, currentValue]);
 
   const reset = useCallback((newValue) => {
     setHistory([newValue]);

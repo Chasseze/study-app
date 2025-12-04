@@ -1,102 +1,181 @@
-# Getting Started with Create React App
+# Study App 📚
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A powerful, feature-rich note-taking application built with React. Perfect for students, professionals, and anyone who wants to organize their thoughts with markdown support.
 
-## Available Scripts
+🌐 **Live Demo**: [https://study-app-71ce4.web.app](https://study-app-71ce4.web.app)
 
-In the project directory, you can run:
+## ✨ Features
 
-### `npm start`
+### 📝 Rich Text Editing
+- **Markdown Support**: Write notes using markdown syntax
+- **Live Preview**: See rendered markdown as you type
+- **Formatting Toolbar**: Bold, italic, underline, headings, lists, code blocks, and more
+- **Custom Syntax**: 
+  - Underline: `++underlined text++`
+  - Colored text: `{{color:emerald|green text}}` or `{{color:#ff0000|red text}}`
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+### 📌 Pin & Organize
+- **Pin Notes**: Pin important notes to the top of your list
+- **Categories**: Organize notes by category
+- **Tags**: Add multiple tags to notes for better organization
+- **Archive**: Archive old notes to keep your list clean (with restore option)
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
-
-### `npm test`
-
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
-
-### `npm run build`
-
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
-
-## How to run locally
-
-1. Install dependencies:
-
-```bash
-npm install
+### 🔗 Note Linking
+Link between notes using wiki-style syntax:
+```markdown
+Check out my [[Getting Started]] guide for more info.
 ```
+- Links to existing notes appear as clickable purple badges
+- Broken links (non-existent notes) show as strikethrough
 
-2. Start the development server:
+### 📋 Templates
+Quickly start notes with pre-made templates:
+- **Blank Note** - Start fresh
+- **Meeting Notes** - Agenda, discussion, action items
+- **Study Guide** - Key concepts, definitions, practice questions
+- **Project Plan** - Goals, timeline, tasks
+- **Daily Journal** - Gratitude, learnings, tomorrow's goals
+- **Book/Article Review** - Summary, takeaways, quotes
+
+### 🔍 Search & Filter
+- **Full-text Search**: Search by title AND content
+- **Category Filter**: Filter notes by category
+- **Real-time Results**: Results update as you type
+
+### ⌨️ Keyboard Shortcuts
+| Shortcut | Action |
+|----------|--------|
+| `Cmd/Ctrl + B` | Bold |
+| `Cmd/Ctrl + I` | Italic |
+| `Cmd/Ctrl + U` | Underline |
+| `Cmd/Ctrl + K` | Insert link |
+| `Cmd/Ctrl + S` | Save |
+| `Cmd/Ctrl + Z` | Undo |
+| `Cmd/Ctrl + Shift + Z` | Redo |
+| `Arrow Keys` | Navigate topics (in sidebar) |
+
+### ↩️ Undo/Redo
+- Full history support with debounced snapshots
+- Works with keyboard shortcuts
+
+### 📤 Export Options
+- **Markdown (.md)**: Download note as markdown file
+- **PDF**: Export with styling preserved
+- **Word (.docx)**: Export as Word document
+- **JSON**: Export all notes as backup
+- **Share**: Native share or copy to clipboard
+
+### 🌓 Dark Mode
+- Toggle between light and dark themes
+- Remembers your preference
+- Respects system preference on first visit
+
+### ☁️ Cloud Sync (Optional)
+- **Firebase Integration**: Sync notes across devices
+- **Google Sign-in**: Easy authentication
+- **Email/Password**: Traditional auth option
+- **Offline Support**: Works without internet (IndexedDB fallback)
+
+### 🔒 Security
+- XSS protection with DOMPurify
+- Sanitized HTML rendering
+- Secure iframe previews for links
+
+## 🚀 Quick Start
+
+### Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/chasseze/study-app.git
+cd study-app
+
+# Install dependencies
+npm install
+
+# Start development server
 npm start
 ```
 
-Open http://localhost:3000 in your browser.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## How to run tests
+### Environment Variables (Optional - for Firebase)
 
-Run the test suite once (CI mode):
+Create a `.env.local` file:
 
-```bash
-CI=true npm test -- --reporters=default
+```env
+REACT_APP_FIREBASE_CONFIG={"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}
+REACT_APP_FIREBASE_DB_URL=https://your-project.firebaseio.com
 ```
 
-Or run in watch mode during development:
+## 📁 Project Structure
+
+```
+src/
+├── App.js                 # Main application component
+├── components/            # Reusable UI components
+│   ├── Editor.js          # Markdown editor with toolbar
+│   ├── Header.js          # App header with controls
+│   ├── Modal.js           # Accessible modal dialog
+│   ├── Preview.js         # Markdown preview
+│   ├── Sidebar.js         # Topic list with search/filter
+│   └── icons.js           # SVG icon components
+├── hooks/                 # Custom React hooks
+│   ├── useTopics.js       # Topic CRUD operations
+│   ├── useStorage.js      # Storage adapter management
+│   ├── useSearch.js       # Search and filtering
+│   ├── useTheme.js        # Dark/light theme
+│   ├── useUndoRedo.js     # Undo/redo history
+│   └── useKeyboardShortcuts.js
+└── lib/                   # Utility libraries
+    ├── markdown.js        # Markdown rendering with custom syntax
+    ├── export.js          # Export to MD/PDF/Word/JSON
+    ├── sanitize.js        # XSS protection
+    ├── storage.js         # Storage abstraction
+    └── firebaseClient.js  # Firebase SDK wrapper
+```
+
+## 🧪 Testing
 
 ```bash
+# Run tests once
+CI=true npm test
+
+# Run tests in watch mode
 npm test
+
+# Current: 87 tests across 15 test suites
 ```
 
-The repository includes a small set of unit and UI tests under `src/`.
+## 📦 Build
+
+```bash
+# Production build
+npm run build
+
+# Deploy to Firebase Hosting
+npx firebase-tools deploy --only hosting
+```
+
+### Bundle Size (with code splitting)
+- **Initial load**: ~180 KB (gzipped)
+- **Export functions**: ~174 KB (lazy loaded)
+- **Firebase SDK**: ~43 KB (chunked)
+
+## 🛠️ Tech Stack
+
+- **React 18** - UI framework
+- **Marked** - Markdown parsing
+- **DOMPurify** - XSS sanitization
+- **jsPDF** - PDF generation
+- **docx** - Word document generation
+- **Firebase** - Authentication & Realtime Database
+- **IndexedDB** - Offline storage
+
+## 📄 License
+
+MIT
+
+---
+
+Made with ❤️ for learners everywhere

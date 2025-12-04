@@ -9,14 +9,11 @@ test('header has Nigeria green border', () => {
   expect(styleAttr).toContain('3px solid #008751');
 });
 
-test('header displays storage selector with icon badge', () => {
+test('header displays storage selector', () => {
   render(<App />);
-  const storageBadge = screen.getByTitle(/notes are saved to this browser/i);
-  expect(storageBadge).toBeInTheDocument();
-  expect(storageBadge.textContent).toMatch(/ll/i);
-
   const select = screen.getByLabelText(/choose where notes are stored/i);
   expect(select).toBeInTheDocument();
-  expect(select).toHaveValue('local');
-  expect(within(select).getByText(/idb/i)).toBeInTheDocument();
+  expect(select).toHaveValue('firebase');
+  expect(within(select).getByText(/offline storage/i)).toBeInTheDocument();
+  expect(within(select).getByText(/cloud sync/i)).toBeInTheDocument();
 });

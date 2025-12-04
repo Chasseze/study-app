@@ -1,16 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import adapter from './lib/adapter';
 import { renderMarkdown } from './lib/markdown';
-import { exportAsMarkdown, exportAsPDF, exportAllAsJSON, importFromJSON } from './lib/export';
+import { isConfigured, onAuthChange, signInWithGoogle, signOut, signInWithEmail, createUserWithEmail } from './lib/firebaseClient';
 import Modal from './components/Modal';
 import Preview from './components/Preview';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Editor from './components/Editor';
-import { BookIcon, EditIcon, SaveIcon } from './components/icons';
-import './theme.css';
-
-// Custom hooks
+import { BookIcon, EditIcon, SaveIcon, TemplateIcon, CheckIcon } from './components/icons';
 import useTopics from './hooks/useTopics';
 import useStorage from './hooks/useStorage';
 import useSearch from './hooks/useSearch';
@@ -18,6 +15,10 @@ import useWorkspaceInsights from './hooks/useWorkspaceInsights';
 import useUndoRedo from './hooks/useUndoRedo';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
 import useTheme from './hooks/useTheme';
+import './theme.css';
+
+// Lazy-loaded export functions (only loaded when exporting) - saves ~40KB initial bundle
+const loadExportFunctions = () => import('./lib/export');
 
 // --- Helper Styles ---
 const srOnlyStyles = {
@@ -36,8 +37,8 @@ const skipLinkBaseStyles = {
   position: 'absolute',
   top: '1rem',
   left: '1rem',
-  backgroundColor: '#ffffff',
-  color: '#1e293b',
+  backgroundColor: 'var(--bg-secondary)',
+  color: 'var(--text-primary)',
   padding: '0.75rem 1rem',
   borderRadius: '0.5rem',
   fontWeight: 600,
@@ -63,8 +64,9 @@ const App = () => {
       id: 1,
       title: 'Getting Started',
       category: 'Tutorial',
-      content: '# Welcome to Your Personal Study Note\n\nThis is your personal space for learning and note-taking.\n\n## Features:\n- **Rich Text Editing**: Write notes with markdown support\n- **Categories**: Organize topics by category\n- **Search**: Find topics quickly\n- **Images & Links**: Add images and hyperlinks to your notes\n- **Undo/Redo**: Use Cmd/Ctrl+Z to undo, Cmd/Ctrl+Shift+Z to redo\n- **Keyboard Shortcuts**: Cmd/Ctrl+B for bold, Cmd/Ctrl+I for italic, Cmd/Ctrl+K for links\n\n## How to Use:\n1. Click the **+ New Topic** button to create a new study topic\n2. Select a topic from the left sidebar to view or edit\n3. Use markdown formatting or the toolbar for rich text\n4. Press Cmd/Ctrl+S to save your changes\n5. Click any link to preview it on the right!\n\nHappy studying!',
-      lastModified: new Date().toISOString()
+      content: '# Welcome to Your Personal Study Note\n\nThis is your personal space for learning and note-taking.\n\n## Features:\n- **Rich Text Editing**: Write notes with markdown support\n- **Categories & Tags**: Organize topics with categories and tags\n- **Pin Notes**: Pin important notes to the top of your list\n- **Archive**: Archive old notes to keep your list clean\n- **Templates**: Use pre-made templates for common note types\n- **Note Linking**: Link to other notes using [[Note Title]] syntax\n- **Search**: Find topics quickly by title or content\n- **Images & Links**: Add images and hyperlinks to your notes\n- **Undo/Redo**: Use Cmd/Ctrl+Z to undo, Cmd/Ctrl+Shift+Z to redo\n- **Keyboard Shortcuts**: Cmd/Ctrl+B for bold, Cmd/Ctrl+I for italic, Cmd/Ctrl+K for links\n- **Export**: Download notes as Markdown, PDF, or Word\n\n## How to Use:\n1. Click the **+ New Topic** button to create a new study topic\n2. Select a topic from the left sidebar to view or edit\n3. Use markdown formatting or the toolbar for rich text\n4. Press Cmd/Ctrl+S to save your changes\n5. Click any link to preview it on the right!\n\n## Note Linking:\nLink to other notes like this: [[Getting Started]]\n\nHappy studying!',
+      lastModified: new Date().toISOString(),
+      pinned: true
     }
   ];
 
@@ -75,8 +77,8 @@ const App = () => {
     storageKey, 
     storageOptions, 
     storageDescription, 
-    storageShortLabel,
     isSwitchingStorage, 
+    isInitialized,
     statusMessage,
     switchStorage,
     saveTopics
@@ -112,6 +114,23 @@ const App = () => {
   const [isSkipLinkFocused, setIsSkipLinkFocused] = useState(false);
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  
+  // Archive state
+  const [showArchived, setShowArchived] = useState(false);
+  
+  // Template state
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  
+  // Auto-save indicator state
+  const [saveStatus, setSaveStatus] = useState('saved'); // 'saved', 'saving', 'unsaved'
+  
+  // Auth state
+  const [authUser, setAuthUser] = useState(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authEmailError, setAuthEmailError] = useState('');
+  const firebaseEnabled = isConfigured();
+  const authEmailRef = useRef(null);
+  const authPasswordRef = useRef(null);
 
   // Refs
   const topicRefs = useRef(new Map());
@@ -126,7 +145,7 @@ const App = () => {
   const lastSelectionRef = useRef({ start: 0, end: 0 });
   const previewContentRef = useRef(null);
 
-  const isModalOpen = showNewTopicModal || showImageModal || showLinkModal || showResetConfirm;
+  const isModalOpen = showNewTopicModal || showImageModal || showLinkModal || showResetConfirm || showAuthModal;
 
   // --- IDs for accessibility ---
   const newTopicHeadingId = 'modal-new-topic-title';
@@ -187,14 +206,14 @@ const App = () => {
     image: () => isEditing && setShowImageModal(true),
     undo: () => {
       if (isEditing && undoRedo.canUndo) {
-        undoRedo.undo();
-        setEditContent(undoRedo.value);
+        const newValue = undoRedo.undo();
+        setEditContent(newValue);
       }
     },
     redo: () => {
       if (isEditing && undoRedo.canRedo) {
-        undoRedo.redo();
-        setEditContent(undoRedo.value);
+        const newValue = undoRedo.redo();
+        setEditContent(newValue);
       }
     },
     save: () => isEditing && handleSave()
@@ -269,6 +288,49 @@ const App = () => {
     }
   };
 
+  // Toggle pin status
+  const handleTogglePin = (id) => {
+    const topic = topics.find(t => t.id === id);
+    if (topic) {
+      updateTopic(id, { pinned: !topic.pinned });
+    }
+  };
+
+  // Archive/restore topic
+  const handleArchiveTopic = (id) => {
+    const topic = topics.find(t => t.id === id);
+    if (topic) {
+      updateTopic(id, { archived: !topic.archived });
+    }
+  };
+
+  // Get archived count for sidebar
+  const archivedCount = topics.filter(t => t.archived).length;
+
+  // Filter topics based on archive state
+  const visibleFilteredTopics = showArchived 
+    ? filteredTopics 
+    : filteredTopics.filter(t => !t.archived);
+
+  // Note templates
+  const noteTemplates = [
+    { id: 'blank', name: 'Blank Note', content: '' },
+    { id: 'meeting', name: 'Meeting Notes', content: '# Meeting Notes\n\n**Date:** \n**Attendees:** \n\n## Agenda\n- \n\n## Discussion\n\n## Action Items\n- [ ] \n\n## Next Steps\n' },
+    { id: 'study', name: 'Study Guide', content: '# Study Guide: [Topic]\n\n## Key Concepts\n1. \n2. \n3. \n\n## Definitions\n- **Term**: Definition\n\n## Examples\n\n## Practice Questions\n1. \n\n## Summary\n' },
+    { id: 'project', name: 'Project Plan', content: '# Project: [Name]\n\n## Overview\n\n## Goals\n- \n\n## Timeline\n| Phase | Start | End | Status |\n|-------|-------|-----|--------|\n| | | | |\n\n## Tasks\n- [ ] \n\n## Resources\n- \n\n## Notes\n' },
+    { id: 'journal', name: 'Daily Journal', content: '# Journal Entry - ' + new Date().toLocaleDateString() + '\n\n## Today I...\n\n## Learned\n\n## Grateful for\n1. \n2. \n3. \n\n## Tomorrow I will...\n' },
+    { id: 'review', name: 'Book/Article Review', content: '# Review: [Title]\n\n**Author:** \n**Date Read:** \n**Rating:** ⭐⭐⭐⭐⭐\n\n## Summary\n\n## Key Takeaways\n1. \n2. \n3. \n\n## Favorite Quotes\n> \n\n## My Thoughts\n' }
+  ];
+
+  const handleApplyTemplate = (template) => {
+    if (selectedTopic && isEditing) {
+      const newContent = template.content;
+      setEditContent(newContent);
+      undoRedo.pushHistory(newContent);
+      setShowTemplateModal(false);
+    }
+  };
+
   const startEditing = () => {
     setEditContent(selectedTopic.content);
     undoRedo.reset(selectedTopic.content);
@@ -277,13 +339,22 @@ const App = () => {
   };
 
   const handleSave = () => {
+    setSaveStatus('saving');
     updateTopic(selectedTopic.id, {
       content: editContent,
       lastModified: new Date().toISOString()
     });
     setIsEditing(false);
     setStatusAnnouncement('Changes saved');
+    setTimeout(() => setSaveStatus('saved'), 500);
   };
+
+  // Auto-save indicator - track unsaved changes
+  useEffect(() => {
+    if (isEditing && selectedTopic && editContent !== selectedTopic.content) {
+      setSaveStatus('unsaved');
+    }
+  }, [editContent, isEditing, selectedTopic]);
 
   const handleAddImage = () => {
     if (imageUrl.trim()) {
@@ -314,13 +385,28 @@ const App = () => {
     if (e.target.tagName === 'A') {
       e.preventDefault();
       const href = e.target.getAttribute('href');
+      const noteId = e.target.getAttribute('data-note-id');
+      
+      // Handle note links (internal linking)
+      if (noteId) {
+        const linkedTopic = topics.find(t => t.id === parseInt(noteId, 10));
+        if (linkedTopic) {
+          setSelectedTopic(linkedTopic);
+          setPreviewUrl('');
+          setIsEditing(false);
+        }
+        return;
+      }
+      
+      // Handle external links
       if (href) {
         setPreviewUrl(href);
       }
     }
   };
 
-  const handleExportMarkdown = () => {
+  const handleExportMarkdown = async () => {
+    const { exportAsMarkdown } = await loadExportFunctions();
     exportAsMarkdown(selectedTopic);
     setShowExportMenu(false);
     setStatusAnnouncement('Topic exported as Markdown');
@@ -328,16 +414,105 @@ const App = () => {
 
   const handleExportPDF = async () => {
     if (previewContentRef.current) {
+      const { exportAsPDF } = await loadExportFunctions();
       const success = await exportAsPDF(selectedTopic, previewContentRef.current);
       setShowExportMenu(false);
       setStatusAnnouncement(success ? 'Topic exported as PDF' : 'PDF export failed');
     }
   };
 
-  const handleExportAll = () => {
+  const handleExportWord = async () => {
+    const { exportAsWord } = await loadExportFunctions();
+    const success = exportAsWord(selectedTopic);
+    setShowExportMenu(false);
+    setStatusAnnouncement(success ? 'Topic exported as Word document' : 'Word export failed');
+  };
+
+  const handleShare = async () => {
+    if (!selectedTopic) return;
+    
+    const shareData = {
+      title: selectedTopic.title,
+      text: `${selectedTopic.title}\n\nCategory: ${selectedTopic.category}\n\n${selectedTopic.content}`,
+    };
+    
+    try {
+      if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+        await navigator.share(shareData);
+        setStatusAnnouncement('Shared successfully');
+      } else {
+        // Fallback: copy to clipboard
+        await navigator.clipboard.writeText(shareData.text);
+        setStatusAnnouncement('Content copied to clipboard');
+      }
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        // User didn't cancel, try clipboard fallback
+        try {
+          await navigator.clipboard.writeText(shareData.text);
+          setStatusAnnouncement('Content copied to clipboard');
+        } catch {
+          setStatusAnnouncement('Share failed');
+        }
+      }
+    }
+    setShowExportMenu(false);
+  };
+
+  const handleExportAll = async () => {
+    const { exportAllAsJSON } = await loadExportFunctions();
     exportAllAsJSON(topics);
     setShowExportMenu(false);
     setStatusAnnouncement('All topics exported as JSON');
+  };
+
+  // Auth handlers
+  const handleSignIn = () => {
+    setShowAuthModal(true);
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      setStatusAnnouncement('Signed out successfully');
+    } catch (e) {
+      console.warn('Sign out failed', e);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      await signInWithGoogle();
+      setShowAuthModal(false);
+      setStatusAnnouncement('Signed in successfully');
+    } catch (e) {
+      console.warn('Google sign in failed', e);
+    }
+  };
+
+  const handleEmailSignIn = async () => {
+    setAuthEmailError('');
+    const email = authEmailRef.current?.value?.trim() || '';
+    const password = authPasswordRef.current?.value || '';
+    
+    if (!email || !password) {
+      setAuthEmailError('Please enter email and password');
+      return;
+    }
+    
+    try {
+      await signInWithEmail(email, password);
+      setShowAuthModal(false);
+      setStatusAnnouncement('Signed in successfully');
+    } catch (err) {
+      try {
+        await createUserWithEmail(email, password);
+        setShowAuthModal(false);
+        setStatusAnnouncement('Account created and signed in');
+      } catch (err2) {
+        setAuthEmailError(err2?.message || err?.message || 'Sign in failed');
+      }
+    }
   };
 
   const handleImport = async (event) => {
@@ -345,6 +520,7 @@ const App = () => {
     if (!file) return;
 
     try {
+      const { importFromJSON } = await loadExportFunctions();
       const imported = await importFromJSON(file);
       // Merge imported topics with existing ones (assign new IDs to avoid conflicts)
       const maxId = topics.length > 0 ? Math.max(...topics.map(t => t.id)) : 0;
@@ -570,25 +746,27 @@ const App = () => {
 
   // --- Effects ---
   
-  // Auto-save topics to storage
+  // Auth state listener
   useEffect(() => {
+    const unsub = onAuthChange((u) => {
+      setAuthUser(u);
+    });
+    return () => unsub && unsub();
+  }, []);
+  
+  // Auto-save topics to storage (only after initial load completes)
+  useEffect(() => {
+    // Don't auto-save until we've loaded from storage
+    if (!isInitialized) {
+      return;
+    }
+    
     const timeoutId = setTimeout(() => {
       saveTopics(topics);
     }, 1000);
 
     return () => clearTimeout(timeoutId);
-  }, [topics, saveTopics]);
-
-  // Load initial topics
-  useEffect(() => {
-    const loadInitial = async () => {
-      const loaded = await adapter.loadTopics();
-      if (Array.isArray(loaded) && loaded.length > 0) {
-        setTopicsFromStorage(loaded);
-      }
-    };
-    loadInitial();
-  }, [setTopicsFromStorage]);
+  }, [topics, saveTopics, isInitialized]);
 
   // Focus management
   useEffect(() => {
@@ -624,8 +802,8 @@ const App = () => {
   // --- Rendered HTML ---
   const previewHtml = useMemo(() => {
     const content = isEditing ? editContent : (selectedTopic?.content || '');
-    return renderMarkdown(content);
-  }, [isEditing, editContent, selectedTopic?.content]);
+    return renderMarkdown(content, topics);
+  }, [isEditing, editContent, selectedTopic?.content, topics]);
 
   const hasPreview = previewUrl && !isEditing;
 
@@ -655,7 +833,8 @@ const App = () => {
         display: 'flex',
         flexDirection: 'column',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        backgroundColor: '#f8fafc',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-primary)',
         position: 'relative'
       }}>
         <Header
@@ -666,7 +845,6 @@ const App = () => {
           isSwitchingStorage={isSwitchingStorage}
           handleStorageChange={handleStorageChange}
           storageDescription={storageDescription}
-          storageShortLabel={storageShortLabel}
           resetButtonDescriptionId={resetButtonDescriptionId}
           setShowResetConfirm={setShowResetConfirm}
           theme={theme}
@@ -677,7 +855,7 @@ const App = () => {
         <section
           aria-label="Workspace insights"
           style={{
-            background: 'linear-gradient(135deg, rgba(224,242,254,0.8), rgba(224,231,255,0.9))',
+            background: 'var(--bg-accent)',
             borderBottom: '1px solid rgba(148,163,184,0.3)'
           }}
         >
@@ -692,11 +870,11 @@ const App = () => {
                   key={id}
                   data-testid={`insight-${id}`}
                   style={{
-                    backgroundColor: 'rgba(255,255,255,0.92)',
+                    backgroundColor: 'var(--bg-card)',
                     borderRadius: '0.7rem',
-                    border: '1px solid rgba(148,163,184,0.2)',
+                    border: '1px solid var(--border-subtle)',
                     padding: '0.3rem 0.6rem',
-                    boxShadow: '0 10px 18px -18px rgba(15,23,42,0.45)',
+                    boxShadow: 'var(--shadow-lg)',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '0.35rem'
@@ -711,7 +889,7 @@ const App = () => {
                     <span style={{
                       fontSize: '0.775rem',
                       fontWeight: '600',
-                      color: '#64748b',
+                      color: 'var(--text-tertiary)',
                       textTransform: 'uppercase',
                       letterSpacing: '0.03em'
                     }}>
@@ -722,13 +900,13 @@ const App = () => {
                     <span style={{
                       fontSize: '1.2rem',
                       fontWeight: '700',
-                      color: '#1e293b'
+                      color: 'var(--text-primary)'
                     }}>
                       {value}
                     </span>
                     <span style={{
                       fontSize: '0.7rem',
-                      color: '#94a3b8'
+                      color: 'var(--text-muted)'
                     }}>
                       {hint}
                     </span>
@@ -758,7 +936,7 @@ const App = () => {
             categoryFilterSelectId={categoryFilterSelectId}
             categoryFilterHelpId={categoryFilterHelpId}
             categories={categories}
-            filteredTopics={filteredTopics}
+            filteredTopics={visibleFilteredTopics}
             topicCountLabelId={topicCountLabelId}
             topicsListboxId={topicsListboxId}
             activeTopicOptionId={activeTopicOptionId}
@@ -770,6 +948,11 @@ const App = () => {
             setPreviewUrl={setPreviewUrl}
             topicRefs={topicRefs}
             handleDeleteTopic={handleDeleteTopic}
+            handleTogglePin={handleTogglePin}
+            handleArchiveTopic={handleArchiveTopic}
+            showArchived={showArchived}
+            setShowArchived={setShowArchived}
+            archivedCount={archivedCount}
             newTopicButtonRef={newTopicButtonRef}
             setShowNewTopicModal={setShowNewTopicModal}
           />
@@ -778,201 +961,372 @@ const App = () => {
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
-            overflow: 'auto',
-            padding: '2rem'
+            overflow: 'auto'
           }}>
             {selectedTopic ? (
               <>
+                {/* Top Toolbar - Actions and User Info */}
                 <div style={{
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  marginBottom: '1.5rem'
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: 'var(--bg-secondary)',
+                  borderBottom: '1px solid var(--border-light)'
                 }}>
-                  <div>
-                    <h2 style={{
-                      fontSize: '1.875rem',
-                      fontWeight: '700',
-                      color: '#1e293b',
-                      marginBottom: '0.5rem'
+                  {/* Left side - Category and Date */}
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    gap: '0.75rem', 
+                    fontSize: '0.8rem', 
+                    color: 'var(--text-tertiary)' 
+                  }}>
+                    <span style={{
+                      backgroundColor: 'var(--bg-tertiary)',
+                      padding: '0.25rem 0.6rem',
+                      borderRadius: '1rem',
+                      fontWeight: '500',
+                      color: '#3b82f6'
                     }}>
-                      {selectedTopic.title}
-                    </h2>
-                    <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: '#64748b' }}>
-                      <span>{selectedTopic.category}</span>
-                      <span>•</span>
-                      <span>Last edited: {new Date(selectedTopic.lastModified).toLocaleDateString()}</span>
-                    </div>
+                      {selectedTopic.category}
+                    </span>
+                    <span>Last edited: {new Date(selectedTopic.lastModified).toLocaleDateString()}</span>
                   </div>
-                  {!isEditing && (
-                    <div style={{ display: 'flex', gap: '0.75rem', position: 'relative' }}>
-                      <button
-                        onClick={startEditing}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.5rem',
-                          backgroundColor: '#8b5cf6',
-                          color: 'white',
-                          padding: '0.75rem 1.5rem',
-                          borderRadius: '0.5rem',
-                          fontWeight: '600',
-                          border: 'none',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <EditIcon /> Edit
-                      </button>
-                      <button
-                        onClick={() => setShowExportMenu(!showExportMenu)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.5rem',
-                          backgroundColor: '#3b82f6',
-                          color: 'white',
-                          padding: '0.75rem 1.5rem',
-                          borderRadius: '0.5rem',
-                          fontWeight: '600',
-                          border: 'none',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Export ▾
-                      </button>
-                      {showExportMenu && (
-                        <div style={{
-                          position: 'absolute',
-                          top: '100%',
-                          right: 0,
-                          marginTop: '0.5rem',
-                          backgroundColor: 'white',
-                          border: '1px solid #e2e8f0',
-                          borderRadius: '0.5rem',
-                          boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
-                          zIndex: 10,
-                          minWidth: '200px'
-                        }}>
+                  
+                  {/* Right side - Actions */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    {!isEditing ? (
+                      <>
+                        <button
+                          onClick={startEditing}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            backgroundColor: '#8b5cf6',
+                            color: 'white',
+                            padding: '0.45rem 0.9rem',
+                            borderRadius: '0.375rem',
+                            fontWeight: '600',
+                            fontSize: '0.8rem',
+                            border: 'none',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <EditIcon /> Edit
+                        </button>
+                        <div style={{ position: 'relative' }}>
                           <button
-                            onClick={handleExportMarkdown}
+                            onClick={() => setShowExportMenu(!showExportMenu)}
                             style={{
-                              width: '100%',
-                              padding: '0.75rem 1rem',
-                              textAlign: 'left',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                              backgroundColor: '#3b82f6',
+                              color: 'white',
+                              padding: '0.45rem 0.9rem',
+                              borderRadius: '0.375rem',
+                              fontWeight: '600',
+                              fontSize: '0.8rem',
                               border: 'none',
-                              background: 'none',
-                              cursor: 'pointer',
-                              fontWeight: '500',
-                              color: '#334155',
-                              borderBottom: '1px solid #f1f5f9'
+                              cursor: 'pointer'
                             }}
-                            onMouseOver={(e) => e.target.style.backgroundColor = '#f8fafc'}
-                            onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
                           >
-                            📄 Export as Markdown
+                            Export ▾
                           </button>
-                          <button
-                            onClick={handleExportPDF}
-                            style={{
-                              width: '100%',
-                              padding: '0.75rem 1rem',
-                              textAlign: 'left',
-                              border: 'none',
-                              background: 'none',
-                              cursor: 'pointer',
-                              fontWeight: '500',
-                              color: '#334155',
-                              borderBottom: '1px solid #f1f5f9'
-                            }}
-                            onMouseOver={(e) => e.target.style.backgroundColor = '#f8fafc'}
-                            onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
-                          >
-                            📑 Export as PDF
-                          </button>
-                          <button
-                            onClick={handleExportAll}
-                            style={{
-                              width: '100%',
-                              padding: '0.75rem 1rem',
-                              textAlign: 'left',
-                              border: 'none',
-                              background: 'none',
-                              cursor: 'pointer',
-                              fontWeight: '500',
-                              color: '#334155',
-                              borderBottom: '1px solid #f1f5f9'
-                            }}
-                            onMouseOver={(e) => e.target.style.backgroundColor = '#f8fafc'}
-                            onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
-                          >
-                            💾 Export All (JSON)
-                          </button>
-                          <label
-                            style={{
-                              width: '100%',
-                              padding: '0.75rem 1rem',
-                              textAlign: 'left',
-                              border: 'none',
-                              background: 'none',
-                              cursor: 'pointer',
-                              fontWeight: '500',
-                              color: '#334155',
-                              display: 'block'
-                            }}
-                            onMouseOver={(e) => e.target.style.backgroundColor = '#f8fafc'}
-                            onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
-                          >
-                            📥 Import from JSON
-                            <input
-                              type="file"
-                              accept=".json"
-                              onChange={handleImport}
-                              style={{ display: 'none' }}
-                            />
-                          </label>
+                          {showExportMenu && (
+                            <div style={{
+                              position: 'absolute',
+                              top: '100%',
+                              right: 0,
+                              marginTop: '0.35rem',
+                              backgroundColor: 'var(--bg-secondary)',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '0.5rem',
+                              boxShadow: 'var(--shadow-md)',
+                              zIndex: 10,
+                              minWidth: '180px'
+                            }}>
+                              <button
+                                onClick={handleExportMarkdown}
+                                style={{
+                                  width: '100%',
+                                  padding: '0.6rem 0.85rem',
+                                  textAlign: 'left',
+                                  border: 'none',
+                                  background: 'none',
+                                  cursor: 'pointer',
+                                  fontWeight: '500',
+                                  fontSize: '0.85rem',
+                                  color: 'var(--text-secondary)',
+                                  borderBottom: '1px solid var(--border-light)'
+                                }}
+                                onMouseOver={(e) => e.target.style.backgroundColor = 'var(--bg-hover)'}
+                                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+                              >
+                                📄 Markdown
+                              </button>
+                              <button
+                                onClick={handleExportPDF}
+                                style={{
+                                  width: '100%',
+                                  padding: '0.6rem 0.85rem',
+                                  textAlign: 'left',
+                                  border: 'none',
+                                  background: 'none',
+                                  cursor: 'pointer',
+                                  fontWeight: '500',
+                                  fontSize: '0.85rem',
+                                  color: 'var(--text-secondary)',
+                                  borderBottom: '1px solid var(--border-light)'
+                                }}
+                                onMouseOver={(e) => e.target.style.backgroundColor = 'var(--bg-hover)'}
+                                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+                              >
+                                📑 PDF
+                              </button>
+                              <button
+                                onClick={handleExportWord}
+                                style={{
+                                  width: '100%',
+                                  padding: '0.6rem 0.85rem',
+                                  textAlign: 'left',
+                                  border: 'none',
+                                  background: 'none',
+                                  cursor: 'pointer',
+                                  fontWeight: '500',
+                                  fontSize: '0.85rem',
+                                  color: 'var(--text-secondary)',
+                                  borderBottom: '1px solid var(--border-light)'
+                                }}
+                                onMouseOver={(e) => e.target.style.backgroundColor = 'var(--bg-hover)'}
+                                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+                              >
+                                📝 Word
+                              </button>
+                              <button
+                                onClick={handleExportAll}
+                                style={{
+                                  width: '100%',
+                                  padding: '0.6rem 0.85rem',
+                                  textAlign: 'left',
+                                  border: 'none',
+                                  background: 'none',
+                                  cursor: 'pointer',
+                                  fontWeight: '500',
+                                  fontSize: '0.85rem',
+                                  color: 'var(--text-secondary)',
+                                  borderBottom: '1px solid var(--border-light)'
+                                }}
+                                onMouseOver={(e) => e.target.style.backgroundColor = 'var(--bg-hover)'}
+                                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+                              >
+                                💾 All (JSON)
+                              </button>
+                              <label
+                                style={{
+                                  width: '100%',
+                                  padding: '0.6rem 0.85rem',
+                                  textAlign: 'left',
+                                  border: 'none',
+                                  background: 'none',
+                                  cursor: 'pointer',
+                                  fontWeight: '500',
+                                  fontSize: '0.85rem',
+                                  color: 'var(--text-secondary)',
+                                  display: 'block',
+                                  borderBottom: '1px solid var(--border-light)',
+                                  boxSizing: 'border-box'
+                                }}
+                                onMouseOver={(e) => e.target.style.backgroundColor = 'var(--bg-hover)'}
+                                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+                              >
+                                📥 Import
+                                <input
+                                  type="file"
+                                  accept=".json"
+                                  onChange={handleImport}
+                                  style={{ display: 'none' }}
+                                />
+                              </label>
+                              <button
+                                onClick={handleShare}
+                                style={{
+                                  width: '100%',
+                                  padding: '0.6rem 0.85rem',
+                                  textAlign: 'left',
+                                  border: 'none',
+                                  background: 'none',
+                                  cursor: 'pointer',
+                                  fontWeight: '500',
+                                  fontSize: '0.85rem',
+                                  color: 'var(--text-secondary)'
+                                }}
+                                onMouseOver={(e) => e.target.style.backgroundColor = 'var(--bg-hover)'}
+                                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+                              >
+                                🔗 Share
+                              </button>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  )}
-                  {isEditing && (
-                    <div style={{ display: 'flex', gap: '0.75rem' }}>
-                      <button
-                        onClick={() => setIsEditing(false)}
-                        style={{
-                          backgroundColor: '#e2e8f0',
-                          color: '#334155',
-                          padding: '0.75rem 1.5rem',
-                          borderRadius: '0.5rem',
-                          fontWeight: '600',
-                          border: 'none',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleSave}
-                        style={{
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => setIsEditing(false)}
+                          style={{
+                            backgroundColor: 'var(--button-secondary)',
+                            color: 'var(--text-secondary)',
+                            padding: '0.45rem 0.9rem',
+                            borderRadius: '0.375rem',
+                            fontWeight: '600',
+                            fontSize: '0.8rem',
+                            border: 'none',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => setShowTemplateModal(true)}
+                          title="Insert template"
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            backgroundColor: '#6366f1',
+                            color: 'white',
+                            padding: '0.45rem 0.7rem',
+                            borderRadius: '0.375rem',
+                            fontWeight: '600',
+                            fontSize: '0.8rem',
+                            border: 'none',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <TemplateIcon /> Templates
+                        </button>
+                        <button
+                          onClick={handleSave}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            backgroundColor: 'var(--button-success)',
+                            color: 'white',
+                            padding: '0.45rem 0.9rem',
+                            borderRadius: '0.375rem',
+                            fontWeight: '600',
+                            fontSize: '0.8rem',
+                            border: 'none',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <SaveIcon /> Save
+                        </button>
+                        {/* Auto-save indicator */}
+                        <span style={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '0.5rem',
-                          backgroundColor: '#10b981',
-                          color: 'white',
-                          padding: '0.75rem 1.5rem',
-                          borderRadius: '0.5rem',
-                          fontWeight: '600',
-                          border: 'none',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <SaveIcon /> Save (Cmd/Ctrl+S)
-                      </button>
-                    </div>
-                  )}
+                          gap: '0.25rem',
+                          fontSize: '0.7rem',
+                          color: saveStatus === 'unsaved' ? '#f59e0b' : saveStatus === 'saving' ? '#3b82f6' : '#10b981',
+                          fontWeight: 500
+                        }}>
+                          {saveStatus === 'unsaved' && '● Unsaved'}
+                          {saveStatus === 'saving' && '○ Saving...'}
+                          {saveStatus === 'saved' && <><CheckIcon /> Saved</>}
+                        </span>
+                      </>
+                    )}
+                    
+                    {/* Divider */}
+                    {firebaseEnabled && (
+                      <div style={{ width: '1px', height: '1.25rem', backgroundColor: 'var(--border-color)', margin: '0 0.25rem' }} />
+                    )}
+                    
+                    {/* Auth Status */}
+                    {firebaseEnabled && (
+                      authUser ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <div 
+                            style={{ 
+                              width: '6px', 
+                              height: '6px', 
+                              borderRadius: '50%', 
+                              backgroundColor: '#10b981',
+                              boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.2)'
+                            }} 
+                          />
+                          <span 
+                            style={{ 
+                              fontSize: '0.75rem', 
+                              color: 'var(--text-secondary)',
+                              maxWidth: '100px',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}
+                            title={authUser.email}
+                          >
+                            {authUser.email?.split('@')[0] || 'User'}
+                          </span>
+                          <button
+                            onClick={handleSignOut}
+                            style={{
+                              fontSize: '0.7rem',
+                              padding: '0.2rem 0.45rem',
+                              borderRadius: '0.25rem',
+                              border: '1px solid var(--border-color)',
+                              background: 'var(--bg-tertiary)',
+                              color: 'var(--text-secondary)',
+                              cursor: 'pointer',
+                              fontWeight: 500
+                            }}
+                          >
+                            Sign out
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={handleSignIn}
+                          style={{
+                            fontSize: '0.75rem',
+                            padding: '0.35rem 0.65rem',
+                            borderRadius: '0.375rem',
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                            color: 'white',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                            boxShadow: '0 1px 3px rgba(79, 70, 229, 0.3)'
+                          }}
+                        >
+                          Sign in
+                        </button>
+                      )
+                    )}
+                  </div>
                 </div>
 
-                {isEditing ? (
-                  <Editor
+                {/* Title Area */}
+                <div style={{ padding: '1.25rem 1.5rem 0.5rem' }}>
+                  <h2 style={{
+                    fontSize: '1.75rem',
+                    fontWeight: '700',
+                    color: 'var(--text-primary)',
+                    margin: 0
+                  }}>
+                    {selectedTopic.title}
+                  </h2>
+                </div>
+
+                {/* Content Area */}
+                <div style={{ flex: 1, padding: '0 1.5rem 1.5rem', overflow: 'auto' }}>
+                  {isEditing ? (
+                    <Editor
                     editContent={editContent}
                     setEditContent={(content) => {
                       setEditContent(content);
@@ -1036,6 +1390,7 @@ const App = () => {
                     )}
                   </div>
                 )}
+                </div>
               </>
             ) : (
               <div style={{
@@ -1043,7 +1398,7 @@ const App = () => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 height: '100%',
-                color: '#94a3b8',
+                color: 'var(--text-muted)',
                 fontSize: '1.125rem'
               }}>
                 <div style={{ textAlign: 'center' }}>
@@ -1066,78 +1421,83 @@ const App = () => {
           <h2 id={newTopicHeadingId} style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1.5rem' }}>
             New Topic
           </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>Title</label>
-              <input
-                type="text"
-                value={newTopicTitle}
-                onChange={(e) => setNewTopicTitle(e.target.value)}
-                ref={newTopicTitleRef}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '0.375rem'
-                }}
-                placeholder="Enter topic title"
-              />
+          <form onSubmit={(e) => { e.preventDefault(); handleAddTopic(); }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>Title</label>
+                <input
+                  type="text"
+                  value={newTopicTitle}
+                  onChange={(e) => setNewTopicTitle(e.target.value)}
+                  ref={newTopicTitleRef}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '0.375rem'
+                  }}
+                  placeholder="Enter topic title"
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>Category</label>
+                <input
+                  type="text"
+                  value={newTopicCategory}
+                  onChange={(e) => setNewTopicCategory(e.target.value)}
+                  ref={newTopicCategoryRef}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '0.375rem',
+                    color: '#3b82f6'
+                  }}
+                  placeholder="Enter category"
+                />
+              </div>
             </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>Category</label>
-              <input
-                type="text"
-                value={newTopicCategory}
-                onChange={(e) => setNewTopicCategory(e.target.value)}
-                ref={newTopicCategoryRef}
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+              <button
+                type="submit"
+                data-testid="btn-create-topic"
+                disabled={!newTopicTitle.trim()}
                 style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '0.375rem'
+                  flex: 1,
+                  backgroundColor: 'var(--button-primary)',
+                  color: 'white',
+                  padding: '0.75rem',
+                  borderRadius: '0.375rem',
+                  fontWeight: '600',
+                  border: 'none',
+                  cursor: 'pointer',
+                  opacity: !newTopicTitle.trim() ? 0.6 : 1
                 }}
-                placeholder="Enter category"
-              />
+              >
+                Create Topic
+              </button>
+              <button
+                type="button"
+                onClick={closeNewTopicModal}
+                aria-describedby={newTopicCancelDescriptionId}
+                style={{
+                  flex: 1,
+                  backgroundColor: 'var(--button-secondary)',
+                  color: 'var(--text-secondary)',
+                  padding: '0.75rem',
+                  borderRadius: '0.375rem',
+                  fontWeight: '600',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <span id={newTopicCancelDescriptionId} style={srOnlyStyles}>
+                Close the new topic dialog without creating a topic.
+              </span>
             </div>
-          </div>
-          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
-            <button
-              onClick={handleAddTopic}
-              disabled={!newTopicTitle.trim()}
-              style={{
-                flex: 1,
-                backgroundColor: '#8b5cf6',
-                color: 'white',
-                padding: '0.75rem',
-                borderRadius: '0.375rem',
-                fontWeight: '600',
-                border: 'none',
-                cursor: 'pointer',
-                opacity: !newTopicTitle.trim() ? 0.6 : 1
-              }}
-            >
-              Create Topic
-            </button>
-            <button
-              onClick={closeNewTopicModal}
-              aria-describedby={newTopicCancelDescriptionId}
-              style={{
-                flex: 1,
-                backgroundColor: '#e2e8f0',
-                color: '#334155',
-                padding: '0.75rem',
-                borderRadius: '0.375rem',
-                fontWeight: '600',
-                border: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              Cancel
-            </button>
-            <span id={newTopicCancelDescriptionId} style={srOnlyStyles}>
-              Close the new topic dialog without creating a topic.
-            </span>
-          </div>
+          </form>
         </Modal>
       )}
 
@@ -1172,11 +1532,12 @@ const App = () => {
           </div>
           <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
             <button
+              data-testid="btn-add-image"
               onClick={handleAddImage}
               disabled={!imageUrl.trim()}
               style={{
                 flex: 1,
-                backgroundColor: '#8b5cf6',
+                backgroundColor: 'var(--button-primary)',
                 color: 'white',
                 padding: '0.75rem',
                 borderRadius: '0.375rem',
@@ -1193,8 +1554,8 @@ const App = () => {
               aria-describedby={imageModalCancelDescriptionId}
               style={{
                 flex: 1,
-                backgroundColor: '#e2e8f0',
-                color: '#334155',
+                backgroundColor: 'var(--button-secondary)',
+                color: 'var(--text-secondary)',
                 padding: '0.75rem',
                 borderRadius: '0.375rem',
                 fontWeight: '600',
@@ -1359,6 +1720,259 @@ const App = () => {
               Close the reset confirmation dialog without clearing stored data.
             </span>
           </div>
+        </Modal>
+      )}
+
+      {/* Templates Modal */}
+      {showTemplateModal && (
+        <Modal 
+          onClose={() => setShowTemplateModal(false)} 
+          labelledBy="template-modal-heading"
+        >
+          <h2 
+            id="template-modal-heading" 
+            style={{ fontSize: '1.25rem', fontWeight: '700', marginBottom: '1rem' }}
+          >
+            Choose a Template
+          </h2>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)', marginBottom: '1rem' }}>
+            Select a template to quickly start your note. This will replace current content.
+          </p>
+          <div style={{ display: 'grid', gap: '0.75rem', maxHeight: '400px', overflowY: 'auto' }}>
+            {noteTemplates.map(template => (
+              <button
+                key={template.id}
+                onClick={() => handleApplyTemplate(template)}
+                style={{
+                  padding: '1rem',
+                  textAlign: 'left',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '0.5rem',
+                  backgroundColor: 'var(--bg-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#4f46e5';
+                  e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border-color)';
+                  e.currentTarget.style.backgroundColor = 'var(--bg-secondary)';
+                }}
+              >
+                <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
+                  {template.name}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {template.content.split('\n')[0] || 'Empty document'}
+                </div>
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setShowTemplateModal(false)}
+            style={{
+              marginTop: '1rem',
+              width: '100%',
+              padding: '0.75rem',
+              backgroundColor: 'var(--bg-tertiary)',
+              color: 'var(--text-secondary)',
+              border: 'none',
+              borderRadius: '0.375rem',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            Cancel
+          </button>
+        </Modal>
+      )}
+
+      {/* Auth Modal */}
+      {showAuthModal && (
+        <Modal 
+          onClose={() => { setShowAuthModal(false); setAuthEmailError(''); }} 
+          labelledBy="auth-modal-heading" 
+          initialFocusRef={authEmailRef}
+        >
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+            <div 
+              style={{ 
+                width: '48px', 
+                height: '48px', 
+                borderRadius: '50%', 
+                background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 1rem',
+                boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)'
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+              </svg>
+            </div>
+            <h2 
+              id="auth-modal-heading" 
+              style={{ 
+                margin: 0, 
+                fontSize: '1.25rem', 
+                fontWeight: 700,
+                color: 'var(--text-primary)'
+              }}
+            >
+              Sync your notes
+            </h2>
+            <p style={{ margin: '0.5rem 0 0', fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
+              Sign in to access your notes from any device
+            </p>
+          </div>
+
+          {/* Google Sign In */}
+          <button
+            onClick={handleGoogleSignIn}
+            style={{
+              width: '100%',
+              padding: '0.75rem 1rem',
+              borderRadius: '0.5rem',
+              border: '1px solid var(--border-color)',
+              background: 'var(--bg-secondary)',
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '0.875rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.75rem',
+              marginBottom: '1rem'
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Continue with Google
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', margin: '1rem 0' }}>
+            <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-color)' }} />
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>or</span>
+            <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-color)' }} />
+          </div>
+
+          {/* Email Sign In */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div>
+              <label 
+                htmlFor="auth-email" 
+                style={{ 
+                  display: 'block', 
+                  fontSize: '0.75rem', 
+                  fontWeight: 600, 
+                  color: 'var(--text-secondary)',
+                  marginBottom: '0.25rem'
+                }}
+              >
+                Email
+              </label>
+              <input
+                id="auth-email"
+                ref={authEmailRef}
+                type="email"
+                placeholder="you@example.com"
+                autoComplete="email"
+                style={{ 
+                  width: '100%',
+                  padding: '0.65rem 0.75rem', 
+                  borderRadius: '0.5rem', 
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: 'var(--bg-secondary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.875rem',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            <div>
+              <label 
+                htmlFor="auth-password" 
+                style={{ 
+                  display: 'block', 
+                  fontSize: '0.75rem', 
+                  fontWeight: 600, 
+                  color: 'var(--text-secondary)',
+                  marginBottom: '0.25rem'
+                }}
+              >
+                Password
+              </label>
+              <input
+                id="auth-password"
+                ref={authPasswordRef}
+                type="password"
+                placeholder="********"
+                autoComplete="current-password"
+                style={{ 
+                  width: '100%',
+                  padding: '0.65rem 0.75rem', 
+                  borderRadius: '0.5rem', 
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: 'var(--bg-secondary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.875rem',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && handleEmailSignIn()}
+              />
+            </div>
+            
+            {authEmailError && (
+              <div 
+                style={{ 
+                  padding: '0.5rem 0.75rem',
+                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.8rem',
+                  color: '#ef4444'
+                }}
+              >
+                {authEmailError}
+              </div>
+            )}
+            
+            <button
+              onClick={handleEmailSignIn}
+              style={{ 
+                width: '100%',
+                padding: '0.75rem', 
+                borderRadius: '0.5rem', 
+                background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', 
+                color: 'white', 
+                border: 'none',
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                cursor: 'pointer'
+              }}
+            >
+              Sign in with Email
+            </button>
+          </div>
+
+          <p style={{ 
+            margin: '1rem 0 0', 
+            fontSize: '0.7rem', 
+            color: 'var(--text-muted)',
+            textAlign: 'center'
+          }}>
+            New user? We will create an account for you automatically.
+          </p>
         </Modal>
       )}
     </>
