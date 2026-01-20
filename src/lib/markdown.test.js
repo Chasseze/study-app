@@ -82,6 +82,16 @@ describe('renderMarkdown', () => {
       expect(result).toContain('color: #ff0000');
       expect(result).toContain('red text');
     });
+
+    it('should not corrupt data URIs containing + characters', () => {
+      // Base64 can contain ++ sequences which should not be treated as underline syntax
+      const dataUri = 'data:image/png;base64,iVBOR++test++abc';
+      const result = renderMarkdown(`![test](${dataUri})`);
+      // The data URI should remain intact - not transformed by underline regex
+      expect(result).toContain(dataUri);
+      expect(result).toContain('<img');
+      expect(result).not.toContain('text-decoration: underline');
+    });
   });
 
   describe('note linking', () => {

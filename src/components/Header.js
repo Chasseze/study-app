@@ -20,16 +20,16 @@ export default function Header({
     <header 
       data-testid="app-header" 
       style={{
-        background: theme === 'dark' 
-          ? 'linear-gradient(135deg, #047857 0%, #047857 25%, #1e293b 25%, #1e293b 75%, #047857 75%, #047857 100%)'
-          : 'linear-gradient(135deg, #008751 0%, #008751 25%, #ffffff 25%, #ffffff 75%, #008751 75%, #008751 100%)',
-        borderBottom: '3px solid ' + borderColor,
-        padding: '0.5rem 1.25rem',
+        background: 'var(--header-gradient)',
+        borderBottom: '3px solid var(--header-border)',
+        padding: '0.75rem 2rem',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         gap: '1rem',
-        boxShadow: '0 2px 8px -2px rgba(0,0,0,0.1)'
+        boxShadow: 'var(--header-shadow)',
+        position: 'relative',
+        zIndex: 100
       }}
     >
       {/* Logo and title */}
@@ -37,24 +37,31 @@ export default function Header({
         <div 
           style={{ 
             backgroundColor: theme === 'dark' ? '#1e293b' : '#ffffff',
-            padding: '0.4rem',
-            borderRadius: '0.5rem',
+            padding: '0.5rem',
+            borderRadius: 'var(--radius-lg)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            boxShadow: 'var(--shadow-md)',
+            transition: 'transform var(--transition-fast)'
           }}
+          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05) rotate(5deg)'}
+          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1) rotate(0deg)'}
         >
           <BookIcon />
         </div>
         <h1 
           style={{ 
-            color: theme === 'dark' ? '#f1f5f9' : '#002b12', 
-            fontSize: '1.35rem', 
-            fontWeight: '700', 
-            letterSpacing: '-0.01em', 
+            fontSize: '1.5rem', 
+            fontWeight: '800', 
+            letterSpacing: '-0.02em', 
             margin: 0,
-            textShadow: theme === 'dark' ? 'none' : '0 1px 2px rgba(255,255,255,0.8)'
+            background: theme === 'dark' 
+              ? 'linear-gradient(135deg, #ffffff, #f1f5f9)' 
+              : 'linear-gradient(135deg, #001a0d, #004225)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
           }}
         >
           Personal Study Note
@@ -68,11 +75,22 @@ export default function Header({
           style={{ 
             display: 'flex', 
             alignItems: 'center',
-            backgroundColor: 'rgba(255,255,255,0.95)',
-            borderRadius: '0.5rem',
-            padding: '0.25rem 0.5rem',
-            border: '1px solid rgba(148,163,184,0.3)',
-            gap: '0.35rem'
+            backgroundColor: theme === 'dark' ? 'rgba(30,41,59,0.9)' : 'rgba(255,255,255,0.95)',
+            borderRadius: 'var(--radius-md)',
+            padding: '0.4rem 0.75rem',
+            border: '1px solid var(--border-subtle)',
+            gap: '0.5rem',
+            boxShadow: 'var(--shadow-sm)',
+            backdropFilter: 'blur(8px)',
+            transition: 'all var(--transition-fast)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+            e.currentTarget.style.transform = 'translateY(-1px)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+            e.currentTarget.style.transform = 'translateY(0)';
           }}
           title={storageDescription}
         >
@@ -114,24 +132,28 @@ export default function Header({
           title={'Switch to ' + (theme === 'light' ? 'dark' : 'light') + ' mode'}
           aria-label={'Switch to ' + (theme === 'light' ? 'dark' : 'light') + ' mode'}
           style={{
-            background: 'rgba(255,255,255,0.95)',
-            color: '#1e293b',
-            border: '1px solid rgba(148,163,184,0.3)',
-            padding: '0.4rem',
-            borderRadius: '0.5rem',
+            background: theme === 'dark' ? 'rgba(30,41,59,0.9)' : 'rgba(255,255,255,0.95)',
+            color: theme === 'dark' ? '#fbbf24' : '#1e293b',
+            border: '1px solid var(--border-subtle)',
+            padding: '0.5rem',
+            borderRadius: 'var(--radius-md)',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            transition: 'all 0.15s ease'
+            transition: 'all var(--transition-fast)',
+            boxShadow: 'var(--shadow-sm)',
+            backdropFilter: 'blur(8px)'
           }}
           onMouseEnter={(e) => { 
-            e.currentTarget.style.transform = 'scale(1.05)';
-            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+            e.currentTarget.style.transform = 'scale(1.1) rotate(15deg)';
+            e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+            e.currentTarget.style.background = theme === 'dark' ? 'rgba(251,191,36,0.2)' : 'rgba(251,191,36,0.1)';
           }}
           onMouseLeave={(e) => { 
-            e.currentTarget.style.transform = 'scale(1)';
-            e.currentTarget.style.boxShadow = 'none';
+            e.currentTarget.style.transform = 'scale(1) rotate(0deg)';
+            e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+            e.currentTarget.style.background = theme === 'dark' ? 'rgba(30,41,59,0.9)' : 'rgba(255,255,255,0.95)';
           }}
         >
           {theme === 'light' ? (
@@ -161,24 +183,30 @@ export default function Header({
           aria-describedby={resetButtonDescriptionId}
           aria-haspopup="dialog"
           style={{
-            background: 'rgba(255,255,255,0.95)',
-            color: '#ef4444',
-            border: '1px solid rgba(148,163,184,0.3)',
-            padding: '0.4rem',
-            borderRadius: '0.5rem',
+            background: theme === 'dark' ? 'rgba(30,41,59,0.9)' : 'rgba(255,255,255,0.95)',
+            color: 'var(--button-danger)',
+            border: '1px solid var(--border-subtle)',
+            padding: '0.5rem',
+            borderRadius: 'var(--radius-md)',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            transition: 'all 0.15s ease'
+            transition: 'all var(--transition-fast)',
+            boxShadow: 'var(--shadow-sm)',
+            backdropFilter: 'blur(8px)'
           }}
           onMouseEnter={(e) => { 
-            e.currentTarget.style.backgroundColor = '#ef4444';
+            e.currentTarget.style.backgroundColor = 'var(--button-danger)';
             e.currentTarget.style.color = 'white';
+            e.currentTarget.style.transform = 'scale(1.1)';
+            e.currentTarget.style.boxShadow = 'var(--shadow-md)';
           }}
           onMouseLeave={(e) => { 
-            e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.95)';
-            e.currentTarget.style.color = '#ef4444';
+            e.currentTarget.style.backgroundColor = theme === 'dark' ? 'rgba(30,41,59,0.9)' : 'rgba(255,255,255,0.95)';
+            e.currentTarget.style.color = 'var(--button-danger)';
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
           }}
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

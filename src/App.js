@@ -859,25 +859,28 @@ const App = () => {
             borderBottom: '1px solid rgba(148,163,184,0.3)'
           }}
         >
-          <div style={{ padding: '0.8rem 2.2rem 1rem' }}>
+          <div style={{ padding: '0.5rem 2rem 0.6rem' }}>
             <div style={{
               display: 'grid',
-              gap: '0.6rem',
+              gap: '0.5rem',
               gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))'
             }}>
               {workspaceInsights.map(({ id, label, value, hint }) => (
                 <div
                   key={id}
                   data-testid={`insight-${id}`}
+                  className="card-hover"
                   style={{
                     backgroundColor: 'var(--bg-card)',
-                    borderRadius: '0.7rem',
+                    borderRadius: 'var(--radius-md)',
                     border: '1px solid var(--border-subtle)',
-                    padding: '0.3rem 0.6rem',
-                    boxShadow: 'var(--shadow-lg)',
+                    padding: '0.6rem 0.9rem',
+                    boxShadow: 'var(--shadow-sm)',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '0.35rem'
+                    gap: '0.3rem',
+                    backdropFilter: 'blur(8px)',
+                    transition: 'all var(--transition-base)'
                   }}
                 >
                   <div style={{
@@ -887,7 +890,7 @@ const App = () => {
                     minWidth: 0
                   }}>
                     <span style={{
-                      fontSize: '0.775rem',
+                      fontSize: '0.7rem',
                       fontWeight: '600',
                       color: 'var(--text-tertiary)',
                       textTransform: 'uppercase',
@@ -898,14 +901,14 @@ const App = () => {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem' }}>
                     <span style={{
-                      fontSize: '1.2rem',
+                      fontSize: '1rem',
                       fontWeight: '700',
                       color: 'var(--text-primary)'
                     }}>
                       {value}
                     </span>
                     <span style={{
-                      fontSize: '0.7rem',
+                      fontSize: '0.65rem',
                       color: 'var(--text-muted)'
                     }}>
                       {hint}
@@ -946,6 +949,7 @@ const App = () => {
             setSelectedTopic={setSelectedTopic}
             setIsEditing={setIsEditing}
             setPreviewUrl={setPreviewUrl}
+            focusTopicById={focusTopicById}
             topicRefs={topicRefs}
             handleDeleteTopic={handleDeleteTopic}
             handleTogglePin={handleTogglePin}
@@ -970,9 +974,10 @@ const App = () => {
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  padding: '0.75rem 1.5rem',
+                  padding: '1rem 2rem',
                   backgroundColor: 'var(--bg-secondary)',
-                  borderBottom: '1px solid var(--border-light)'
+                  borderBottom: '1px solid var(--border-light)',
+                  boxShadow: 'var(--shadow-sm)'
                 }}>
                   {/* Left side - Category and Date */}
                   <div style={{ 
@@ -983,11 +988,14 @@ const App = () => {
                     color: 'var(--text-tertiary)' 
                   }}>
                     <span style={{
-                      backgroundColor: 'var(--bg-tertiary)',
-                      padding: '0.25rem 0.6rem',
-                      borderRadius: '1rem',
-                      fontWeight: '500',
-                      color: '#3b82f6'
+                      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                      padding: '0.375rem 0.75rem',
+                      borderRadius: 'var(--radius-full)',
+                      fontWeight: '600',
+                      fontSize: '0.8125rem',
+                      color: '#3b82f6',
+                      border: '1px solid rgba(59, 130, 246, 0.2)',
+                      boxShadow: 'var(--shadow-xs)'
                     }}>
                       {selectedTopic.category}
                     </span>
@@ -1003,15 +1011,27 @@ const App = () => {
                           style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '0.35rem',
-                            backgroundColor: '#8b5cf6',
+                            gap: '0.5rem',
+                            background: 'var(--button-primary)',
                             color: 'white',
-                            padding: '0.45rem 0.9rem',
-                            borderRadius: '0.375rem',
+                            padding: '0.6rem 1.25rem',
+                            borderRadius: 'var(--radius-md)',
                             fontWeight: '600',
-                            fontSize: '0.8rem',
+                            fontSize: '0.875rem',
                             border: 'none',
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            boxShadow: 'var(--shadow-sm)',
+                            transition: 'all var(--transition-fast)'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'var(--button-primary-hover)';
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'var(--button-primary)';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
                           }}
                         >
                           <EditIcon /> Edit
@@ -1022,15 +1042,27 @@ const App = () => {
                             style={{
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '0.35rem',
-                              backgroundColor: '#3b82f6',
+                              gap: '0.5rem',
+                              background: 'var(--button-info)',
                               color: 'white',
-                              padding: '0.45rem 0.9rem',
-                              borderRadius: '0.375rem',
+                              padding: '0.6rem 1.25rem',
+                              borderRadius: 'var(--radius-md)',
                               fontWeight: '600',
-                              fontSize: '0.8rem',
+                              fontSize: '0.875rem',
                               border: 'none',
-                              cursor: 'pointer'
+                              cursor: 'pointer',
+                              boxShadow: 'var(--shadow-sm)',
+                              transition: 'all var(--transition-fast)'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'var(--button-info-hover)';
+                              e.currentTarget.style.transform = 'translateY(-2px)';
+                              e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'var(--button-info)';
+                              e.currentTarget.style.transform = 'translateY(0)';
+                              e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
                             }}
                           >
                             Export ▾
@@ -1040,13 +1072,15 @@ const App = () => {
                               position: 'absolute',
                               top: '100%',
                               right: 0,
-                              marginTop: '0.35rem',
+                              marginTop: '0.5rem',
                               backgroundColor: 'var(--bg-secondary)',
                               border: '1px solid var(--border-color)',
-                              borderRadius: '0.5rem',
-                              boxShadow: 'var(--shadow-md)',
+                              borderRadius: 'var(--radius-lg)',
+                              boxShadow: 'var(--shadow-xl)',
                               zIndex: 10,
-                              minWidth: '180px'
+                              minWidth: '200px',
+                              overflow: 'hidden',
+                              animation: 'slideUp 200ms cubic-bezier(0.4, 0, 0.2, 1)'
                             }}>
                               <button
                                 onClick={handleExportMarkdown}
@@ -1179,12 +1213,24 @@ const App = () => {
                           style={{
                             backgroundColor: 'var(--button-secondary)',
                             color: 'var(--text-secondary)',
-                            padding: '0.45rem 0.9rem',
-                            borderRadius: '0.375rem',
+                            padding: '0.6rem 1.25rem',
+                            borderRadius: 'var(--radius-md)',
                             fontWeight: '600',
-                            fontSize: '0.8rem',
+                            fontSize: '0.875rem',
                             border: 'none',
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            transition: 'all var(--transition-fast)',
+                            boxShadow: 'var(--shadow-xs)'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'var(--button-secondary-hover)';
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'var(--button-secondary)';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = 'var(--shadow-xs)';
                           }}
                         >
                           Cancel
@@ -1195,15 +1241,27 @@ const App = () => {
                           style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '0.35rem',
-                            backgroundColor: '#6366f1',
+                            gap: '0.5rem',
+                            background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
                             color: 'white',
-                            padding: '0.45rem 0.7rem',
-                            borderRadius: '0.375rem',
+                            padding: '0.6rem 1rem',
+                            borderRadius: 'var(--radius-md)',
                             fontWeight: '600',
-                            fontSize: '0.8rem',
+                            fontSize: '0.875rem',
                             border: 'none',
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            boxShadow: 'var(--shadow-sm)',
+                            transition: 'all var(--transition-fast)'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'linear-gradient(135deg, #4f46e5, #4338ca)';
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'linear-gradient(135deg, #6366f1, #4f46e5)';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
                           }}
                         >
                           <TemplateIcon /> Templates
@@ -1213,15 +1271,27 @@ const App = () => {
                           style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '0.35rem',
+                            gap: '0.5rem',
                             backgroundColor: 'var(--button-success)',
                             color: 'white',
-                            padding: '0.45rem 0.9rem',
-                            borderRadius: '0.375rem',
+                            padding: '0.6rem 1.25rem',
+                            borderRadius: 'var(--radius-md)',
                             fontWeight: '600',
-                            fontSize: '0.8rem',
+                            fontSize: '0.875rem',
                             border: 'none',
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            boxShadow: 'var(--shadow-sm)',
+                            transition: 'all var(--transition-fast)'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'var(--button-success-hover)';
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'var(--button-success)';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
                           }}
                         >
                           <SaveIcon /> Save
@@ -1312,19 +1382,21 @@ const App = () => {
                 </div>
 
                 {/* Title Area */}
-                <div style={{ padding: '1.25rem 1.5rem 0.5rem' }}>
+                <div style={{ padding: '1.5rem 2rem 1rem' }}>
                   <h2 style={{
-                    fontSize: '1.75rem',
-                    fontWeight: '700',
+                    fontSize: '2rem',
+                    fontWeight: '800',
                     color: 'var(--text-primary)',
-                    margin: 0
+                    margin: 0,
+                    letterSpacing: '-0.02em',
+                    lineHeight: 1.2
                   }}>
                     {selectedTopic.title}
                   </h2>
                 </div>
 
                 {/* Content Area */}
-                <div style={{ flex: 1, padding: '0 1.5rem 1.5rem', overflow: 'auto' }}>
+                <div style={{ flex: 1, padding: '0 2rem 2rem', overflow: 'auto' }}>
                   {isEditing ? (
                     <Editor
                     editContent={editContent}
@@ -1464,14 +1536,35 @@ const App = () => {
                 disabled={!newTopicTitle.trim()}
                 style={{
                   flex: 1,
-                  backgroundColor: 'var(--button-primary)',
+                  background: !newTopicTitle.trim() 
+                    ? 'linear-gradient(135deg, #a78bfa, #8b5cf6)' 
+                    : 'var(--button-primary)',
                   color: 'white',
                   padding: '0.75rem',
-                  borderRadius: '0.375rem',
+                  borderRadius: 'var(--radius-md)',
                   fontWeight: '600',
+                  fontSize: '0.9375rem',
                   border: 'none',
-                  cursor: 'pointer',
-                  opacity: !newTopicTitle.trim() ? 0.6 : 1
+                  cursor: !newTopicTitle.trim() ? 'not-allowed' : 'pointer',
+                  opacity: !newTopicTitle.trim() ? 0.7 : 1,
+                  boxShadow: !newTopicTitle.trim() 
+                    ? 'var(--shadow-xs)' 
+                    : 'var(--shadow-md)',
+                  transition: 'all var(--transition-fast)'
+                }}
+                onMouseEnter={(e) => {
+                  if (newTopicTitle.trim()) {
+                    e.currentTarget.style.background = 'var(--button-primary-hover)';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = 'var(--shadow-lg)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (newTopicTitle.trim()) {
+                    e.currentTarget.style.background = 'var(--button-primary)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                  }
                 }}
               >
                 Create Topic

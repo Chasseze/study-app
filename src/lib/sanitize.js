@@ -12,6 +12,9 @@ export default function sanitize(htmlString) {
       // Allow `style` but let DOMPurify filter any unsafe CSS. This keeps
       // color styling from the editor's preview while avoiding inline JS.
       ALLOWED_ATTR: ['href','src','alt','title','style'],
+      // Allow embedded images from local uploads (data:image/...) while keeping
+      // URI handling strict for other tags.
+      ADD_DATA_URI_TAGS: ['img'],
       RETURN_TRUSTED_TYPE: false
     });
   } catch (e) {

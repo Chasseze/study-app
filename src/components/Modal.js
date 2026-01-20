@@ -1,5 +1,30 @@
 import React, { useEffect, useRef } from 'react';
 
+// Add keyframe animations
+const modalStyles = `
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+`;
+
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style');
+  styleSheet.textContent = modalStyles;
+  document.head.appendChild(styleSheet);
+}
+
 const FOCUSABLE_SELECTORS = [
   'a[href]',
   'button:not([disabled])',
@@ -82,12 +107,14 @@ const Modal = ({ children, onClose, labelledBy, describedBy, initialFocusRef }) 
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.45)',
+        backgroundColor: 'var(--bg-overlay)',
+        backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 1000,
-        padding: '1rem'
+        padding: '1rem',
+        animation: 'fadeIn 200ms ease-out'
       }}
       onClick={onClose}
       aria-hidden="true"
@@ -100,12 +127,14 @@ const Modal = ({ children, onClose, labelledBy, describedBy, initialFocusRef }) 
         ref={containerRef}
         tabIndex={-1}
         style={{
-          backgroundColor: '#ffffff',
-          borderRadius: '0.75rem',
-          padding: '1.5rem',
+          backgroundColor: 'var(--bg-secondary)',
+          borderRadius: 'var(--radius-xl)',
+          padding: '2rem',
           width: '100%',
-          maxWidth: '420px',
-          boxShadow: '0 14px 35px -10px rgba(15, 23, 42, 0.4)'
+          maxWidth: '480px',
+          boxShadow: 'var(--shadow-2xl)',
+          border: '1px solid var(--border-color)',
+          animation: 'slideUp 200ms cubic-bezier(0.4, 0, 0.2, 1)'
         }}
         onClick={(event) => event.stopPropagation()}
       >

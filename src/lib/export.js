@@ -364,7 +364,7 @@ function convertMarkdownToHtml(markdown) {
   html = html.replace(/^\*\*\*$/gm, '<hr>');
   
   // Unordered lists
-  html = html.replace(/^[\*\-] (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
   html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
   
   // Ordered lists

@@ -49,7 +49,17 @@ const renderer = {
   // Custom image renderer
   image({ href, title, text }) {
     const titleAttr = title ? ` title="${title}"` : '';
-    return `<img src="${href}" alt="${text}"${titleAttr} style="max-width: 100%; height: auto; border-radius: 0.5rem; margin: 1rem 0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"/>`;
+    const altAttr = text ? ` alt="${text}"` : ' alt=""';
+
+    const isUploadedDataImage = typeof href === 'string' && href.startsWith('data:image/');
+
+    // Both uploaded and linked images use the same responsive styling
+    // for consistent appearance in the preview.
+    if (isUploadedDataImage) {
+      return `<img src="${href}"${altAttr}${titleAttr} style="max-width: 100%; height: auto; border-radius: 0.5rem; margin: 1rem 0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"/>`;
+    }
+
+    return `<img src="${href}"${altAttr}${titleAttr} style="max-width: 100%; height: auto; border-radius: 0.5rem; margin: 1rem 0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);"/>`;
   },
 
   // Custom link renderer
@@ -110,7 +120,16 @@ export function renderMarkdown(text, topics = []) {
     return '<p style="color: #94a3b8; font-style: italic;">This note is empty. Start writing!</p>';
   }
 
-  let processed = text;
+  // Protect data URIs from custom syntax preprocessing.
+  // Base64 data can contain characters like + that would be corrupted by
+  // the underline (++text++) regex. We temporarily replace data URIs with
+  // placeholders, run our custom preprocessing, then restore them.
+  const dataUriPlaceholders = [];
+  let processed = text.replace(/!\[([^\]]*)\]\((data:[^)]+)\)/g, (match, alt, dataUri) => {
+    const idx = dataUriPlaceholders.length;
+    dataUriPlaceholders.push({ alt, dataUri });
+    return `__DATA_URI_PLACEHOLDER_${idx}__`;
+  });
 
   // Handle custom underline syntax (++text++)
   processed = processed.replace(/\+\+(.+?)\+\+/g, '<span style="text-decoration: underline;">$1</span>');
@@ -132,6 +151,13 @@ export function renderMarkdown(text, topics = []) {
     }
     // Note not found - show as broken link
     return `<span style="color: #ef4444; text-decoration: line-through; opacity: 0.7;">[[${noteTitle}]]</span>`;
+  });
+
+  // Restore data URI placeholders before parsing
+  processed = processed.replace(/__DATA_URI_PLACEHOLDER_(\d+)__/g, (match, idxStr) => {
+    const idx = parseInt(idxStr, 10);
+    const { alt, dataUri } = dataUriPlaceholders[idx] || { alt: '', dataUri: '' };
+    return `![${alt}](${dataUri})`;
   });
 
   // Parse markdown with marked

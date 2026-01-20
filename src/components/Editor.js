@@ -1,5 +1,5 @@
-import React from 'react';
-import { ImageIcon, LinkIcon, PaletteIcon } from './icons';
+import React, { useRef } from 'react';
+import { ImageIcon, LinkIcon, PaletteIcon, UploadImageIcon } from './icons';
 import Preview from './Preview';
 
 export default function Editor({
@@ -18,6 +18,71 @@ export default function Editor({
   previewHtml,
   handleContentClick
 }) {
+  const uploadInputRef = useRef(null);
+
+  const insertTextAtCursor = (textToInsert) => {
+    const textarea = editTextareaRef?.current;
+    if (!textarea) {
+      setEditContent((editContent || '') + textToInsert);
+      return;
+    }
+
+    const start = textarea.selectionStart ?? (editContent || '').length;
+    const end = textarea.selectionEnd ?? start;
+    const before = (editContent || '').slice(0, start);
+    const after = (editContent || '').slice(end);
+    const next = before + textToInsert + after;
+    setEditContent(next);
+
+    // Best-effort caret restore
+    requestAnimationFrame(() => {
+      try {
+        textarea.focus();
+        const caret = start + textToInsert.length;
+        textarea.setSelectionRange(caret, caret);
+      } catch (e) {
+        // no-op
+      }
+      updateSelectionRef();
+    });
+  };
+
+  const readFileAsDataURL = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+
+  const getImageDimensions = (src) => new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
+    img.onerror = () => resolve({ width: null, height: null });
+    img.src = src;
+  });
+
+  const handleUploadChange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    // Reset input so selecting the same file again triggers onChange
+    e.target.value = '';
+
+    if (!file) return;
+    if (!file.type || !file.type.startsWith('image/')) return;
+
+    try {
+      const dataUrl = await readFileAsDataURL(file);
+      const { width, height } = await getImageDimensions(dataUrl);
+      const safeAlt = (file.name || 'Image').replace(/\.[^/.]+$/, '');
+      const metaTitle = width && height ? `w=${width} h=${height}` : '';
+      const titlePart = metaTitle ? ` "${metaTitle}"` : '';
+      const md = `\n\n![${safeAlt}](${dataUrl}${titlePart})\n\n`;
+      insertTextAtCursor(md);
+    } catch (err) {
+      // If something goes wrong, fail quietly (no modal/toast in current UX)
+      // console.warn('Image upload failed', err);
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', height: '100%' }}>
       <div style={{ flex: '1 1 320px', minWidth: '280px', display: 'flex', flexDirection: 'column' }}>
@@ -25,26 +90,67 @@ export default function Editor({
           role="toolbar"
           aria-label="Insert content into the note"
           aria-describedby="formatting-toolbar-help"
-          style={{ marginBottom: '1rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}
+          style={{ 
+            marginBottom: '1.5rem', 
+            display: 'flex', 
+            gap: '0.75rem', 
+            flexWrap: 'wrap', 
+            alignItems: 'center',
+            padding: '1rem',
+            backgroundColor: 'var(--bg-tertiary)',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border-color)',
+            boxShadow: 'var(--shadow-sm)'
+          }}
         >
           <span id="formatting-toolbar-help" style={{ position: 'absolute', left: -9999 }}>
             Use the formatting buttons to insert markdown at the current cursor position in the editor.
           </span>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={() => applyMarkdownFormatting('heading')}
-              aria-label="Insert heading"
-              title="Insert heading"
-              style={{ width: '2.25rem', height: '2.25rem' }}
-            >H</button>
-            <button type="button" onClick={() => applyMarkdownFormatting('bold')} aria-label="Bold" title="Bold" style={{ width: '2.25rem', height: '2.25rem' }}>B</button>
-            <button type="button" onClick={() => applyMarkdownFormatting('italic')} aria-label="Italic" title="Italic" style={{ width: '2.25rem', height: '2.25rem' }}>I</button>
-            <button type="button" onClick={() => applyMarkdownFormatting('underline')} aria-label="Underline" title="Underline" style={{ width: '2.25rem', height: '2.25rem' }}>U</button>
-            <button type="button" onClick={() => applyMarkdownFormatting('code')} aria-label="Inline code" title="Inline code" style={{ width: '2.25rem', height: '2.25rem' }}>`</button>
-            <button type="button" onClick={() => applyMarkdownFormatting('unordered-list')} aria-label="Bulleted list" title="Bulleted list" style={{ width: '2.25rem', height: '2.25rem' }}>•</button>
-            <button type="button" onClick={() => applyMarkdownFormatting('ordered-list')} aria-label="Numbered list" title="Numbered list" style={{ width: '2.25rem', height: '2.25rem' }}>1.</button>
-            <button type="button" onClick={() => applyMarkdownFormatting('quote')} aria-label="Block quote" title="Block quote" style={{ width: '2.25rem', height: '2.25rem' }}>&gt;</button>
+            {[
+              { key: 'heading', label: 'H', title: 'Insert heading' },
+              { key: 'bold', label: 'B', title: 'Bold' },
+              { key: 'italic', label: 'I', title: 'Italic' },
+              { key: 'underline', label: 'U', title: 'Underline' },
+              { key: 'code', label: '`', title: 'Inline code' },
+              { key: 'unordered-list', label: '•', title: 'Bulleted list' },
+              { key: 'ordered-list', label: '1.', title: 'Numbered list' },
+              { key: 'quote', label: '>', title: 'Block quote' }
+            ].map(({ key, label, title }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => applyMarkdownFormatting(key)}
+                aria-label={title}
+                title={title}
+                style={{ 
+                  width: '2.5rem', 
+                  height: '2.5rem',
+                  backgroundColor: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-sm)',
+                  color: 'var(--text-primary)',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all var(--transition-fast)',
+                  boxShadow: 'var(--shadow-xs)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--bg-hover)';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                  e.currentTarget.style.borderColor = 'var(--border-focus)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--bg-secondary)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'var(--shadow-xs)';
+                  e.currentTarget.style.borderColor = 'var(--border-color)';
+                }}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
           <div style={{ position: 'relative' }}>
@@ -83,11 +189,110 @@ export default function Editor({
             )}
           </div>
 
-          <span aria-hidden="true" style={{ width: '1px', height: '1.75rem', backgroundColor: 'var(--border-color)' }} />
-          <button type="button" onClick={() => setShowImageModal(true)} style={{ backgroundColor: 'var(--button-info)', color: 'white', padding: '0.5rem 0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem' }}>
+          <span aria-hidden="true" style={{ width: '1px', height: '2rem', backgroundColor: 'var(--border-color)' }} />
+          <button 
+            type="button" 
+            onClick={() => setShowImageModal(true)} 
+            style={{ 
+              background: 'var(--button-info)',
+              color: 'white', 
+              padding: '0.6rem 1rem', 
+              borderRadius: 'var(--radius-md)', 
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              boxShadow: 'var(--shadow-sm)',
+              transition: 'all var(--transition-fast)'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--button-info-hover)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--button-info)';
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+            }}
+          >
             <ImageIcon /> Add Image
           </button>
-          <button type="button" onClick={() => setShowLinkModal(true)} style={{ backgroundColor: 'var(--button-primary)', color: 'white', padding: '0.5rem 0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem' }}>
+          <button
+            type="button"
+            onClick={() => uploadInputRef.current && uploadInputRef.current.click()}
+            aria-label="Upload Image"
+            title="Upload Image"
+            style={{ 
+              background: 'var(--button-info)',
+              color: 'white', 
+              padding: '0.6rem 1rem', 
+              borderRadius: 'var(--radius-md)', 
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              boxShadow: 'var(--shadow-sm)',
+              transition: 'all var(--transition-fast)'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--button-info-hover)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--button-info)';
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+            }}
+          >
+            <UploadImageIcon /> Upload
+          </button>
+          <input
+            ref={uploadInputRef}
+            data-testid="image-upload-input"
+            type="file"
+            accept="image/*"
+            onChange={handleUploadChange}
+            style={{ position: 'absolute', left: -9999, width: 1, height: 1, opacity: 0 }}
+            tabIndex={-1}
+            aria-hidden="true"
+          />
+          <button 
+            type="button" 
+            onClick={() => setShowLinkModal(true)} 
+            style={{ 
+              background: 'var(--button-primary)',
+              color: 'white', 
+              padding: '0.6rem 1rem', 
+              borderRadius: 'var(--radius-md)', 
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              boxShadow: 'var(--shadow-sm)',
+              transition: 'all var(--transition-fast)'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--button-primary-hover)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--button-primary)';
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+            }}
+          >
             <LinkIcon /> Add Link
           </button>
         </div>
@@ -102,13 +307,53 @@ export default function Editor({
           onMouseUp={updateSelectionRef}
           placeholder="Write your notes here... (Markdown supported)"
           ref={editTextareaRef}
-          style={{ flex: 1, padding: '1rem', border: '1px solid var(--border-color)', borderRadius: '0.5rem', fontSize: '0.875rem', fontFamily: 'monospace', resize: 'none', lineHeight: 1.5, backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+          style={{ 
+            flex: 1, 
+            padding: '1.25rem', 
+            border: '1px solid var(--border-color)', 
+            borderRadius: 'var(--radius-lg)', 
+            fontSize: '0.9375rem', 
+            fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace', 
+            resize: 'none', 
+            lineHeight: 1.7, 
+            backgroundColor: 'var(--bg-secondary)', 
+            color: 'var(--text-primary)',
+            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)',
+            transition: 'all var(--transition-fast)'
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = 'var(--border-focus)';
+            e.currentTarget.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.05), 0 0 0 3px rgba(139,92,246,0.1)';
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = 'var(--border-color)';
+            e.currentTarget.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.05)';
+          }}
         />
       </div>
 
-      <div style={{ flex: '1 1 320px', minWidth: '280px', backgroundColor: 'var(--bg-tertiary)', padding: '1rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)' }}>
-        <h3 style={{ fontWeight: '600', marginBottom: '1rem', color: 'var(--text-secondary)' }}>Preview</h3>
-        <Preview html={previewHtml} onContentClick={handleContentClick} />
+      <div style={{ 
+        flex: '1 1 320px', 
+        minWidth: '280px', 
+        backgroundColor: 'var(--bg-secondary)', 
+        padding: '1.5rem', 
+        borderRadius: 'var(--radius-lg)', 
+        border: '1px solid var(--border-color)',
+        boxShadow: 'var(--shadow-sm)',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        <h3 style={{ 
+          fontWeight: '700', 
+          marginBottom: '1.25rem', 
+          color: 'var(--text-primary)',
+          fontSize: '1.125rem',
+          paddingBottom: '0.75rem',
+          borderBottom: '2px solid var(--border-light)'
+        }}>Preview</h3>
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          <Preview html={previewHtml} onContentClick={handleContentClick} />
+        </div>
       </div>
     </div>
   );
