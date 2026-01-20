@@ -7,7 +7,7 @@ import Preview from './components/Preview';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Editor from './components/Editor';
-import { BookIcon, EditIcon, SaveIcon, TemplateIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon } from './components/icons';
+import { BookIcon, EditIcon, SaveIcon, TemplateIcon, CheckIcon, ChevronDownIcon } from './components/icons';
 import useTopics from './hooks/useTopics';
 import useStorage from './hooks/useStorage';
 import useSearch from './hooks/useSearch';
