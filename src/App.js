@@ -7,7 +7,7 @@ import Preview from './components/Preview';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Editor from './components/Editor';
-import { BookIcon, EditIcon, SaveIcon, TemplateIcon, CheckIcon } from './components/icons';
+import { BookIcon, EditIcon, SaveIcon, TemplateIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon } from './components/icons';
 import useTopics from './hooks/useTopics';
 import useStorage from './hooks/useStorage';
 import useSearch from './hooks/useSearch';
@@ -120,6 +120,9 @@ const App = () => {
   
   // Template state
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  
+  // Workspace insights collapsed state
+  const [isInsightsExpanded, setIsInsightsExpanded] = useState(false);
   
   // Auto-save indicator state
   const [saveStatus, setSaveStatus] = useState('saved'); // 'saved', 'saving', 'unsaved'
@@ -726,6 +729,73 @@ const App = () => {
         }
         break;
       }
+      case 'strikethrough':
+        wrapSelection('~~', '~~', 'strikethrough text');
+        break;
+      case 'code-block': {
+        const placeholder = 'code here';
+        const textValue = selected || placeholder;
+        const isLineStart = start === 0 || value[start - 1] === '\n';
+        const prefix = isLineStart ? '```\n' : '\n```\n';
+        const suffix = selected ? '\n```' : '\n```';
+        insertBlock(prefix, textValue, suffix);
+        break;
+      }
+      case 'horizontal-rule': {
+        const isLineStart = start === 0 || value[start - 1] === '\n';
+        const prefix = isLineStart ? '' : '\n';
+        const hr = '---';
+        const before = value.slice(0, start);
+        const after = value.slice(end);
+        newValue = `${before}${prefix}${hr}\n${after}`;
+        newSelectionStart = start + prefix.length + hr.length + 1;
+        newSelectionEnd = newSelectionStart;
+        break;
+      }
+      case 'checkbox': {
+        const placeholder = 'Task item';
+        const textValue = selected || placeholder;
+        const isLineStart = start === 0 || value[start - 1] === '\n';
+        const prefix = isLineStart ? '' : '\n';
+        const suffix = selected ? '' : '\n';
+        const content = textValue
+          .split('\n')
+          .map((line) => {
+            const trimmed = line.trim();
+            if (!trimmed) return '- [ ] ';
+            const normalized = trimmed.replace(/^[-*]\s*\[[ xX]\]\s*/, '');
+            return `- [ ] ${normalized}`;
+          })
+          .join('\n');
+        const before = value.slice(0, start);
+        const after = value.slice(end);
+        newValue = `${before}${prefix}${content}${suffix}${after}`;
+        if (selected) {
+          newSelectionStart = start + prefix.length;
+          newSelectionEnd = newSelectionStart + content.length;
+        } else {
+          newSelectionStart = start + prefix.length + 6;
+          newSelectionEnd = newSelectionStart + placeholder.length;
+        }
+        break;
+      }
+      case 'table': {
+        const isLineStart = start === 0 || value[start - 1] === '\n';
+        const prefix = isLineStart ? '' : '\n';
+        const table = '| Header 1 | Header 2 | Header 3 |\n|----------|----------|----------|\n| Cell 1   | Cell 2   | Cell 3   |\n| Cell 4   | Cell 5   | Cell 6   |';
+        const before = value.slice(0, start);
+        const after = value.slice(end);
+        newValue = `${before}${prefix}${table}\n${after}`;
+        newSelectionStart = start + prefix.length + table.length + 1;
+        newSelectionEnd = newSelectionStart;
+        break;
+      }
+      case 'subscript':
+        wrapSelection('<sub>', '</sub>', 'subscript');
+        break;
+      case 'superscript':
+        wrapSelection('<sup>', '</sup>', 'superscript');
+        break;
       default:
         return;
     }
@@ -859,11 +929,75 @@ const App = () => {
             borderBottom: '1px solid rgba(148,163,184,0.3)'
           }}
         >
-          <div style={{ padding: '0.5rem 2rem 0.6rem' }}>
+          {/* Collapsible Header */}
+          <button
+            onClick={() => setIsInsightsExpanded(!isInsightsExpanded)}
+            aria-expanded={isInsightsExpanded}
+            aria-label={isInsightsExpanded ? 'Collapse workspace insights' : 'Expand workspace insights'}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.6rem 2rem',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--text-secondary)',
+              transition: 'all var(--transition-fast)'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(148,163,184,0.1)';
+              e.currentTarget.style.color = 'var(--text-primary)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = 'var(--text-secondary)';
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{
+                fontSize: '0.75rem',
+                fontWeight: '700',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em'
+              }}>
+                Workspace Insights
+              </span>
+              {!isInsightsExpanded && (
+                <span style={{
+                  fontSize: '0.7rem',
+                  color: 'var(--text-muted)',
+                  fontWeight: '500'
+                }}>
+                  ({workspaceInsights.map(i => i.value).join(' • ')})
+                </span>
+              )}
+            </div>
+            <div style={{
+              transform: isInsightsExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform var(--transition-base)',
+              display: 'flex',
+              alignItems: 'center'
+            }}>
+              <ChevronDownIcon />
+            </div>
+          </button>
+          
+          {/* Collapsible Content */}
+          <div
+            style={{
+              maxHeight: isInsightsExpanded ? '500px' : '0',
+              overflow: 'hidden',
+              transition: 'max-height var(--transition-base), padding var(--transition-base)',
+              padding: isInsightsExpanded ? '0 2rem 0.6rem' : '0 2rem'
+            }}
+          >
             <div style={{
               display: 'grid',
               gap: '0.5rem',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))'
+              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+              paddingTop: isInsightsExpanded ? '0' : '0'
             }}>
               {workspaceInsights.map(({ id, label, value, hint }) => (
                 <div

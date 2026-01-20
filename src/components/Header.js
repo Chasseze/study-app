@@ -14,8 +14,6 @@ export default function Header({
   theme,
   onToggleTheme
 }) {
-  const borderColor = theme === 'dark' ? '#047857' : '#008751';
-
   return (
     <header 
       data-testid="app-header" 

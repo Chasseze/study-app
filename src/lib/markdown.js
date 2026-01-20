@@ -97,6 +97,32 @@ const renderer = {
   blockquote({ tokens }) {
     const quote = this.parser.parse(tokens);
     return `<blockquote style="border-left: 4px solid #94a3b8; padding-left: 1rem; margin: 1rem 0; color: #64748b; font-style: italic;">${quote}</blockquote>\n`;
+  },
+
+  // Custom table renderer
+  table({ header, rows }) {
+    let tableHTML = '<table style="border-collapse: collapse; width: 100%; margin: 1rem 0; border: 1px solid #e2e8f0;">\n<thead>\n<tr>';
+    
+    // Render header
+    header.forEach((cell) => {
+      const cellText = this.parser.parseInline(cell.tokens);
+      tableHTML += `<th style="border: 1px solid #e2e8f0; padding: 0.5rem 0.75rem; background-color: #f8fafc; font-weight: 600; text-align: left;">${cellText}</th>`;
+    });
+    
+    tableHTML += '</tr>\n</thead>\n<tbody>\n';
+    
+    // Render rows
+    rows.forEach((row) => {
+      tableHTML += '<tr>';
+      row.forEach((cell) => {
+        const cellText = this.parser.parseInline(cell.tokens);
+        tableHTML += `<td style="border: 1px solid #e2e8f0; padding: 0.5rem 0.75rem;">${cellText}</td>`;
+      });
+      tableHTML += '</tr>\n';
+    });
+    
+    tableHTML += '</tbody>\n</table>\n';
+    return tableHTML;
   }
 };
 
@@ -160,8 +186,26 @@ export function renderMarkdown(text, topics = []) {
     return `![${alt}](${dataUri})`;
   });
 
+  // Temporarily replace HTML tags and parse their content
+  const htmlTagPlaceholders = [];
+  processed = processed.replace(/<(sub|sup)>(.+?)<\/(sub|sup)>/g, (match, openTag, content, closeTag) => {
+    const idx = htmlTagPlaceholders.length;
+    // Parse the content as markdown first
+    const parsedContent = marked.parseInline(content);
+    htmlTagPlaceholders.push({ tag: openTag, content: parsedContent });
+    // Use a placeholder that won't be parsed by markdown
+    return `__SUBSCRIPT_SUPERSCRIPT_PLACEHOLDER_${idx}__`;
+  });
+
   // Parse markdown with marked
   let html = marked.parse(processed);
+
+  // Restore HTML tags after markdown parsing
+  html = html.replace(/__SUBSCRIPT_SUPERSCRIPT_PLACEHOLDER_(\d+)__/g, (match, idxStr) => {
+    const idx = parseInt(idxStr, 10);
+    const { tag, content } = htmlTagPlaceholders[idx] || { tag: 'sub', content: '' };
+    return `<${tag}>${content}</${tag}>`;
+  });
 
   // Sanitize the output
   return sanitize(html);

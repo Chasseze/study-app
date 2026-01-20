@@ -85,37 +85,50 @@ export default function Editor({
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', height: '100%' }}>
-      <div style={{ flex: '1 1 320px', minWidth: '280px', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: '1 1 320px', minWidth: '280px', display: 'flex', flexDirection: 'column', position: 'relative' }}>
         <div
           role="toolbar"
           aria-label="Insert content into the note"
           aria-describedby="formatting-toolbar-help"
           style={{ 
-            marginBottom: '1.5rem', 
-            display: 'flex', 
-            gap: '0.75rem', 
-            flexWrap: 'wrap', 
+            position: 'sticky',
+            top: 0,
+            zIndex: 10,
+            marginBottom: '1rem', 
+            display: 'grid',
+            gridTemplateColumns: 'repeat(10, max-content)',
+            gridTemplateRows: 'repeat(2, 1fr)',
+            gap: '0.3rem',
             alignItems: 'center',
-            padding: '1rem',
+            padding: '0.5rem 0.6rem',
             backgroundColor: 'var(--bg-tertiary)',
-            borderRadius: 'var(--radius-lg)',
+            borderRadius: 'var(--radius-md)',
             border: '1px solid var(--border-color)',
-            boxShadow: 'var(--shadow-sm)'
+            boxShadow: 'var(--shadow-md)',
+            backdropFilter: 'blur(8px)',
+            maxWidth: '100%'
           }}
         >
           <span id="formatting-toolbar-help" style={{ position: 'absolute', left: -9999 }}>
             Use the formatting buttons to insert markdown at the current cursor position in the editor.
           </span>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'contents' }}>
             {[
               { key: 'heading', label: 'H', title: 'Insert heading' },
               { key: 'bold', label: 'B', title: 'Bold' },
               { key: 'italic', label: 'I', title: 'Italic' },
               { key: 'underline', label: 'U', title: 'Underline' },
+              { key: 'strikethrough', label: 'S', title: 'Strikethrough' },
               { key: 'code', label: '`', title: 'Inline code' },
+              { key: 'code-block', label: '```', title: 'Code block' },
               { key: 'unordered-list', label: '•', title: 'Bulleted list' },
               { key: 'ordered-list', label: '1.', title: 'Numbered list' },
-              { key: 'quote', label: '>', title: 'Block quote' }
+              { key: 'checkbox', label: '☐', title: 'Checkbox/Todo list' },
+              { key: 'quote', label: '>', title: 'Block quote' },
+              { key: 'horizontal-rule', label: '─', title: 'Horizontal rule' },
+              { key: 'table', label: '⊞', title: 'Insert table' },
+              { key: 'subscript', label: 'X₂', title: 'Subscript' },
+              { key: 'superscript', label: 'X²', title: 'Superscript' }
             ].map(({ key, label, title }) => (
               <button
                 key={key}
@@ -124,13 +137,14 @@ export default function Editor({
                 aria-label={title}
                 title={title}
                 style={{ 
-                  width: '2.5rem', 
-                  height: '2.5rem',
+                  width: '2.15rem', 
+                  height: '2.15rem',
+                  fontSize: '0.8rem',
                   backgroundColor: 'var(--bg-secondary)',
                   border: '1px solid var(--border-color)',
                   borderRadius: 'var(--radius-sm)',
                   color: 'var(--text-primary)',
-                  fontWeight: '600',
+                  fontWeight: '700',
                   cursor: 'pointer',
                   transition: 'all var(--transition-fast)',
                   boxShadow: 'var(--shadow-xs)'
@@ -164,7 +178,32 @@ export default function Editor({
               onClick={() => setIsColorPickerOpen(prev => !prev)}
               title="Text color"
               aria-label="Text color"
-              style={{ width: '2.25rem', height: '2.25rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              style={{ 
+                width: '2.15rem', 
+                height: '2.15rem', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                backgroundColor: 'var(--bg-secondary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                transition: 'all var(--transition-fast)',
+                boxShadow: 'var(--shadow-xs)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--bg-hover)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                e.currentTarget.style.borderColor = 'var(--border-focus)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--bg-secondary)';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'var(--shadow-xs)';
+                e.currentTarget.style.borderColor = 'var(--border-color)';
+              }}
             >
               <PaletteIcon />
             </button>
@@ -189,23 +228,24 @@ export default function Editor({
             )}
           </div>
 
-          <span aria-hidden="true" style={{ width: '1px', height: '2rem', backgroundColor: 'var(--border-color)' }} />
+          <span aria-hidden="true" style={{ width: '1px', height: '1.65rem', backgroundColor: 'var(--border-color)', gridColumn: 'span 1' }} />
           <button 
             type="button" 
-            onClick={() => setShowImageModal(true)} 
+            onClick={() => setShowImageModal(true)}
+            aria-label="Add Image"
+            title="Add Image"
             style={{ 
+              width: '2.15rem',
+              height: '2.15rem',
               background: 'var(--button-info)',
               color: 'white', 
-              padding: '0.6rem 1rem', 
-              borderRadius: 'var(--radius-md)', 
-              fontSize: '0.875rem',
-              fontWeight: '600',
+              borderRadius: 'var(--radius-sm)', 
               border: 'none',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.4rem',
-              boxShadow: 'var(--shadow-sm)',
+              justifyContent: 'center',
+              boxShadow: 'var(--shadow-xs)',
               transition: 'all var(--transition-fast)'
             }}
             onMouseEnter={(e) => {
@@ -216,10 +256,10 @@ export default function Editor({
             onMouseLeave={(e) => {
               e.currentTarget.style.background = 'var(--button-info)';
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+              e.currentTarget.style.boxShadow = 'var(--shadow-xs)';
             }}
           >
-            <ImageIcon /> Add Image
+            <ImageIcon />
           </button>
           <button
             type="button"
@@ -227,18 +267,17 @@ export default function Editor({
             aria-label="Upload Image"
             title="Upload Image"
             style={{ 
+              width: '2.15rem',
+              height: '2.15rem',
               background: 'var(--button-info)',
               color: 'white', 
-              padding: '0.6rem 1rem', 
-              borderRadius: 'var(--radius-md)', 
-              fontSize: '0.875rem',
-              fontWeight: '600',
+              borderRadius: 'var(--radius-sm)', 
               border: 'none',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.4rem',
-              boxShadow: 'var(--shadow-sm)',
+              justifyContent: 'center',
+              boxShadow: 'var(--shadow-xs)',
               transition: 'all var(--transition-fast)'
             }}
             onMouseEnter={(e) => {
@@ -249,10 +288,10 @@ export default function Editor({
             onMouseLeave={(e) => {
               e.currentTarget.style.background = 'var(--button-info)';
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+              e.currentTarget.style.boxShadow = 'var(--shadow-xs)';
             }}
           >
-            <UploadImageIcon /> Upload
+            <UploadImageIcon />
           </button>
           <input
             ref={uploadInputRef}
@@ -266,20 +305,21 @@ export default function Editor({
           />
           <button 
             type="button" 
-            onClick={() => setShowLinkModal(true)} 
+            onClick={() => setShowLinkModal(true)}
+            aria-label="Add Link"
+            title="Add Link"
             style={{ 
+              width: '2.15rem',
+              height: '2.15rem',
               background: 'var(--button-primary)',
               color: 'white', 
-              padding: '0.6rem 1rem', 
-              borderRadius: 'var(--radius-md)', 
-              fontSize: '0.875rem',
-              fontWeight: '600',
+              borderRadius: 'var(--radius-sm)', 
               border: 'none',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.4rem',
-              boxShadow: 'var(--shadow-sm)',
+              justifyContent: 'center',
+              boxShadow: 'var(--shadow-xs)',
               transition: 'all var(--transition-fast)'
             }}
             onMouseEnter={(e) => {
@@ -290,10 +330,10 @@ export default function Editor({
             onMouseLeave={(e) => {
               e.currentTarget.style.background = 'var(--button-primary)';
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+              e.currentTarget.style.boxShadow = 'var(--shadow-xs)';
             }}
           >
-            <LinkIcon /> Add Link
+            <LinkIcon />
           </button>
         </div>
 
