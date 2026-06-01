@@ -15,12 +15,14 @@ export default function Header({
   onToggleTheme
 }) {
   return (
-    <header 
-      data-testid="app-header" 
+    <header
+      data-testid="app-header"
       style={{
+        height: 60,
+        flexShrink: 0,
         background: 'var(--header-gradient)',
-        borderBottom: '3px solid var(--header-border)',
-        padding: '0.75rem 2rem',
+        borderBottom: '1px solid var(--header-border)',
+        padding: '0 1.5rem',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -30,72 +32,62 @@ export default function Header({
         zIndex: 100
       }}
     >
-      {/* Logo and title */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-        <div 
-          style={{ 
-            backgroundColor: theme === 'dark' ? '#1e293b' : '#ffffff',
-            padding: '0.5rem',
-            borderRadius: 'var(--radius-lg)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: 'var(--shadow-md)',
-            transition: 'transform var(--transition-fast)'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05) rotate(5deg)'}
-          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1) rotate(0deg)'}
-        >
+      {/* Brand */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+        <div style={{
+          width: 34, height: 34,
+          background: 'var(--accent)',
+          color: 'var(--fg-on-accent)',
+          borderRadius: 'var(--radius-md)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: 'var(--shadow-sm)',
+          flexShrink: 0
+        }}>
           <BookIcon />
         </div>
-        <h1 
-          style={{ 
-            fontSize: '1.5rem', 
-            fontWeight: '800', 
-            letterSpacing: '-0.02em', 
-            margin: 0,
-            background: theme === 'dark' 
-              ? 'linear-gradient(135deg, #ffffff, #f1f5f9)' 
-              : 'linear-gradient(135deg, #001a0d, #004225)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text'
-          }}
-        >
-          Personal Study Note
-        </h1>
+        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+          <span style={{
+            fontSize: '0.9375rem',
+            fontWeight: 700,
+            letterSpacing: '-0.01em',
+            color: 'var(--text-primary)'
+          }}>Study Notes</span>
+          <span style={{
+            fontSize: '0.6875rem',
+            fontWeight: 500,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            color: 'var(--text-muted)'
+          }}>Your study space</span>
+        </div>
       </div>
 
-      {/* Right side controls */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-        {/* Storage selector */}
-        <div 
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center',
-            backgroundColor: theme === 'dark' ? 'rgba(30,41,59,0.9)' : 'rgba(255,255,255,0.95)',
-            borderRadius: 'var(--radius-md)',
-            padding: '0.4rem 0.75rem',
-            border: '1px solid var(--border-subtle)',
-            gap: '0.5rem',
-            boxShadow: 'var(--shadow-sm)',
-            backdropFilter: 'blur(8px)',
-            transition: 'all var(--transition-fast)'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-            e.currentTarget.style.transform = 'translateY(-1px)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
-            e.currentTarget.style.transform = 'translateY(0)';
+      {/* Right controls */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        {/* Storage chip */}
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.375rem',
+            padding: '0.375rem 0.75rem',
+            background: 'var(--bg-tertiary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-full)',
+            color: 'var(--text-secondary)',
+            fontSize: '0.8125rem',
+            fontWeight: 500,
+            boxShadow: 'var(--shadow-xs)'
           }}
           title={storageDescription}
         >
-          <span style={{ color: '#64748b', display: 'flex' }}>
+          <span style={{
+            width: 7, height: 7, borderRadius: '50%',
+            background: 'var(--success)',
+            flexShrink: 0
+          }} />
+          <span style={{ color: 'var(--text-muted)', display: 'flex' }}>
             <StorageIcon />
           </span>
-          <label htmlFor={storageSelectId} id={storageSelectLabelId} style={{ display: 'none' }}>
+          <label htmlFor={storageSelectId} id={storageSelectLabelId} style={{ position: 'absolute', left: -9999 }}>
             Choose where notes are stored
           </label>
           <select
@@ -105,20 +97,19 @@ export default function Header({
             onChange={handleStorageChange}
             disabled={isSwitchingStorage}
             style={{
-              fontSize: '0.75rem',
-              fontWeight: 600,
               border: 'none',
-              backgroundColor: 'transparent',
-              color: '#1e293b',
+              background: 'transparent',
+              color: 'var(--text-secondary)',
+              fontFamily: 'inherit',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
               cursor: isSwitchingStorage ? 'progress' : 'pointer',
               outline: 'none',
-              paddingRight: '0.25rem'
+              padding: 0
             }}
           >
             {storageOptions.map(option => (
-              <option key={option.key} value={option.key}>
-                {option.label}
-              </option>
+              <option key={option.key} value={option.key}>{option.label}</option>
             ))}
           </select>
         </div>
@@ -127,53 +118,47 @@ export default function Header({
         <button
           type="button"
           onClick={onToggleTheme}
-          title={'Switch to ' + (theme === 'light' ? 'dark' : 'light') + ' mode'}
-          aria-label={'Switch to ' + (theme === 'light' ? 'dark' : 'light') + ' mode'}
+          title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+          aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
           style={{
-            background: theme === 'dark' ? 'rgba(30,41,59,0.9)' : 'rgba(255,255,255,0.95)',
-            color: theme === 'dark' ? '#fbbf24' : '#1e293b',
-            border: '1px solid var(--border-subtle)',
-            padding: '0.5rem',
-            borderRadius: 'var(--radius-md)',
+            width: 34, height: 34,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'transparent',
+            color: 'var(--text-tertiary)',
+            border: '1px solid transparent',
+            borderRadius: 'var(--radius-sm)',
             cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'all var(--transition-fast)',
-            boxShadow: 'var(--shadow-sm)',
-            backdropFilter: 'blur(8px)'
+            transition: 'all var(--transition-fast)'
           }}
-          onMouseEnter={(e) => { 
-            e.currentTarget.style.transform = 'scale(1.1) rotate(15deg)';
-            e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-            e.currentTarget.style.background = theme === 'dark' ? 'rgba(251,191,36,0.2)' : 'rgba(251,191,36,0.1)';
+          onMouseEnter={e => {
+            e.currentTarget.style.background = 'var(--bg-hover)';
+            e.currentTarget.style.color = 'var(--text-primary)';
           }}
-          onMouseLeave={(e) => { 
-            e.currentTarget.style.transform = 'scale(1) rotate(0deg)';
-            e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
-            e.currentTarget.style.background = theme === 'dark' ? 'rgba(30,41,59,0.9)' : 'rgba(255,255,255,0.95)';
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.color = 'var(--text-tertiary)';
           }}
         >
           {theme === 'light' ? (
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
             </svg>
           ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="5"/>
-              <line x1="12" y1="1" x2="12" y2="3"/>
-              <line x1="12" y1="21" x2="12" y2="23"/>
-              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
-              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-              <line x1="1" y1="12" x2="3" y2="12"/>
-              <line x1="21" y1="12" x2="23" y2="12"/>
-              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
-              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="4.2"/>
+              <line x1="12" y1="2" x2="12" y2="4.5"/>
+              <line x1="12" y1="19.5" x2="12" y2="22"/>
+              <line x1="4.2" y1="4.2" x2="6" y2="6"/>
+              <line x1="18" y1="18" x2="19.8" y2="19.8"/>
+              <line x1="2" y1="12" x2="4.5" y2="12"/>
+              <line x1="19.5" y1="12" x2="22" y2="12"/>
+              <line x1="4.2" y1="19.8" x2="6" y2="18"/>
+              <line x1="18" y1="6" x2="19.8" y2="4.2"/>
             </svg>
           )}
         </button>
 
-        {/* Reset button */}
+        {/* Reset (icon-only) */}
         <button
           type="button"
           onClick={() => setShowResetConfirm(true)}
@@ -181,33 +166,25 @@ export default function Header({
           aria-describedby={resetButtonDescriptionId}
           aria-haspopup="dialog"
           style={{
-            background: theme === 'dark' ? 'rgba(30,41,59,0.9)' : 'rgba(255,255,255,0.95)',
-            color: 'var(--button-danger)',
-            border: '1px solid var(--border-subtle)',
-            padding: '0.5rem',
-            borderRadius: 'var(--radius-md)',
+            width: 34, height: 34,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'transparent',
+            color: 'var(--text-muted)',
+            border: '1px solid transparent',
+            borderRadius: 'var(--radius-sm)',
             cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'all var(--transition-fast)',
-            boxShadow: 'var(--shadow-sm)',
-            backdropFilter: 'blur(8px)'
+            transition: 'all var(--transition-fast)'
           }}
-          onMouseEnter={(e) => { 
-            e.currentTarget.style.backgroundColor = 'var(--button-danger)';
-            e.currentTarget.style.color = 'white';
-            e.currentTarget.style.transform = 'scale(1.1)';
-            e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+          onMouseEnter={e => {
+            e.currentTarget.style.background = 'var(--danger-soft)';
+            e.currentTarget.style.color = 'var(--danger-fg)';
           }}
-          onMouseLeave={(e) => { 
-            e.currentTarget.style.backgroundColor = theme === 'dark' ? 'rgba(30,41,59,0.9)' : 'rgba(255,255,255,0.95)';
-            e.currentTarget.style.color = 'var(--button-danger)';
-            e.currentTarget.style.transform = 'scale(1)';
-            e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.color = 'var(--text-muted)';
           }}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="3 6 5 6 21 6"/>
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
           </svg>

@@ -1425,7 +1425,7 @@ const App = () => {
         height: '100vh',
         display: 'flex',
         flexDirection: 'column',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        fontFamily: 'var(--font-sans)',
         backgroundColor: 'var(--bg-primary)',
         color: 'var(--text-primary)',
         position: 'relative'
@@ -1448,8 +1448,8 @@ const App = () => {
         <section
           aria-label="Workspace insights"
           style={{
-            background: 'var(--bg-accent)',
-            borderBottom: '1px solid rgba(148,163,184,0.3)'
+            background: 'var(--bg-secondary)',
+            borderBottom: '1px solid var(--border-color)'
           }}
         >
           {/* Collapsible Header */}
@@ -1470,7 +1470,7 @@ const App = () => {
               transition: 'all var(--transition-fast)'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(148,163,184,0.1)';
+              e.currentTarget.style.backgroundColor = 'var(--bg-hover)';
               e.currentTarget.style.color = 'var(--text-primary)';
             }}
             onMouseLeave={(e) => {
@@ -1663,13 +1663,13 @@ const App = () => {
                     color: 'var(--text-tertiary)' 
                   }}>
                     <span style={{
-                      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                      backgroundColor: 'var(--accent-soft)',
                       padding: '0.375rem 0.75rem',
                       borderRadius: 'var(--radius-full)',
                       fontWeight: '600',
                       fontSize: '0.8125rem',
-                      color: '#3b82f6',
-                      border: '1px solid rgba(59, 130, 246, 0.2)',
+                      color: 'var(--accent-fg)',
+                      border: '1px solid var(--accent-border)',
                       boxShadow: 'var(--shadow-xs)'
                     }}>
                       {selectedTopic.category}
@@ -1700,8 +1700,7 @@ const App = () => {
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.background = 'var(--button-primary-hover)';
-                            e.currentTarget.style.transform = 'translateY(-2px)';
-                            e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                            e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
                           }}
                           onMouseLeave={(e) => {
                             e.currentTarget.style.background = 'var(--button-primary)';
