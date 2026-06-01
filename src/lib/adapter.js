@@ -67,6 +67,9 @@ export async function clearTopics() { return current.clearTopics ? await current
 export function subscribeToChanges(callback) { 
   return current.subscribeToChanges ? current.subscribeToChanges(callback) : () => {}; 
 }
+export function onAuthChange(callback) {
+  return current.onAuthChange ? current.onAuthChange(callback) : () => {};
+}
 
 const adapterExport = {
   setAdapter,
@@ -74,6 +77,7 @@ const adapterExport = {
   saveTopics,
   clearTopics,
   subscribeToChanges,
+  onAuthChange,
   getCurrentAdapterKey,
   getCurrentAdapterMeta,
   listAdapters

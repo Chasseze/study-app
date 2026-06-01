@@ -146,4 +146,53 @@ describe('useSearch hook', () => {
       expect(result.current.categories).toEqual(['All']);
     });
   });
+
+  describe('matchSnippets', () => {
+    it('returns empty object when search query is empty', () => {
+      const { result } = renderHook(() => useSearch(mockTopics));
+      expect(result.current.matchSnippets).toEqual({});
+    });
+
+    it('returns no snippet when query matches only the title', () => {
+      const { result } = renderHook(() => useSearch(mockTopics));
+      act(() => { result.current.setSearchQuery('React'); });
+      expect(result.current.matchSnippets[1]).toBeUndefined();
+    });
+
+    it('returns a snippet when query matches only the content', () => {
+      const { result } = renderHook(() => useSearch(mockTopics));
+      act(() => { result.current.setSearchQuery('hooks'); });
+      const snippet = result.current.matchSnippets[1];
+      expect(snippet).toBeDefined();
+      expect(snippet.match).toMatch(/hooks/i);
+    });
+
+    it('snippet has before/match/after parts with surrounding context', () => {
+      const { result } = renderHook(() => useSearch(mockTopics));
+      act(() => { result.current.setSearchQuery('timeline'); });
+      const snippet = result.current.matchSnippets[3];
+      expect(snippet).toBeDefined();
+      expect(snippet.match).toMatch(/timeline/i);
+      expect(typeof snippet.before).toBe('string');
+      expect(typeof snippet.after).toBe('string');
+    });
+
+    it('uses ellipsis prefix when match is not at start of content', () => {
+      const topics = [
+        { id: 99, title: 'X', category: 'All', content: 'one two three four five six seven ' + 'needle' + ' eight nine' }
+      ];
+      const { result } = renderHook(() => useSearch(topics));
+      act(() => { result.current.setSearchQuery('needle'); });
+      const snippet = result.current.matchSnippets[99];
+      expect(snippet).toBeDefined();
+      expect(snippet.before).toMatch(/^…/);
+    });
+
+    it('does not produce a snippet when content does not contain the query', () => {
+      const { result } = renderHook(() => useSearch(mockTopics));
+      act(() => { result.current.setSearchQuery('pasta'); });
+      expect(result.current.matchSnippets[4]).toBeDefined();
+      expect(result.current.matchSnippets[1]).toBeUndefined();
+    });
+  });
 });

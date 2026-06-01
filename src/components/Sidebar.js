@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { PlusIcon, SearchIcon, FolderIcon, TrashIcon, PinIcon, ArchiveIcon } from './icons';
 
 export default function Sidebar({
@@ -31,8 +31,28 @@ export default function Sidebar({
   setSelectedCategory,
   categoryFilterLabelId,
   categoryFilterSelectId,
-  categoryFilterHelpId
+  categoryFilterHelpId,
+  allTags,
+  selectedTagFilter,
+  setSelectedTagFilter,
+  onRenameTagGlobally,
+  onDeleteTagGlobally,
+  savedFilters,
+  hasActiveFilter,
+  onSaveCurrentFilterPreset,
+  onApplySavedFilter,
+  onRenameSavedFilter,
+  onTogglePinSavedFilter,
+  onMoveSavedFilter,
+  onMoveSavedFilterToEdge,
+  onReorderSavedFilter,
+  onDeleteSavedFilter,
+  savedViewsDensity,
+  onToggleSavedViewsDensity,
+  matchSnippets
 }) {
+  const [draggedPresetId, setDraggedPresetId] = useState(null);
+  const [openOverflowId, setOpenOverflowId] = useState(null);
   // Sort topics: pinned first, then by lastModified
   const sortedTopics = [...filteredTopics].sort((a, b) => {
     if (a.pinned && !b.pinned) return -1;
@@ -137,6 +157,7 @@ export default function Sidebar({
           <span id={searchHelpId} style={{ position: 'absolute', left: -9999 }}>{'Search topics by title or note content. Results update immediately.'}</span>
           <span id={topicCountLabelId} aria-live="polite" style={{ position: 'absolute', left: -9999 }}>{topicCountAnnouncement}</span>
         </div>
+
       </div>
 
       <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
@@ -181,6 +202,72 @@ export default function Sidebar({
         </select>
       </div>
 
+      {/* Tag filter chips */}
+      {allTags && allTags.length > 0 && (
+        <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+          <p style={{ margin: '0 0 0.35rem', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Filter by tag</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+            {allTags.map(tag => (
+              <div key={tag} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <button
+                  data-testid={`tag-filter-${tag}`}
+                  onClick={() => setSelectedTagFilter(selectedTagFilter === tag ? null : tag)}
+                  style={{
+                    flex: 1,
+                    textAlign: 'left',
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    padding: '0.2rem 0.5rem',
+                    borderRadius: '999px',
+                    border: selectedTagFilter === tag ? '1px solid #1d4ed8' : '1px solid #bfdbfe',
+                    backgroundColor: selectedTagFilter === tag ? '#1d4ed8' : '#dbeafe',
+                    color: selectedTagFilter === tag ? '#fff' : '#1d4ed8',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  #{tag}
+                </button>
+                <button
+                  type="button"
+                  data-testid={`tag-rename-${tag}`}
+                  onClick={() => onRenameTagGlobally(tag)}
+                  style={{
+                    border: '1px solid #cbd5e1',
+                    backgroundColor: '#f8fafc',
+                    color: '#334155',
+                    borderRadius: '0.35rem',
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    padding: '0.18rem 0.35rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Rename
+                </button>
+                <button
+                  type="button"
+                  data-testid={`tag-delete-${tag}`}
+                  onClick={() => onDeleteTagGlobally(tag)}
+                  style={{
+                    border: '1px solid #fecaca',
+                    backgroundColor: '#fff1f2',
+                    color: '#be123c',
+                    borderRadius: '0.35rem',
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    padding: '0.18rem 0.35rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Archive toggle */}
       {archivedCount > 0 && (
         <div style={{ 
@@ -210,6 +297,346 @@ export default function Sidebar({
           </button>
         </div>
       )}
+
+      {/* Saved filter presets */}
+      <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+          <p style={{ margin: 0, fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Saved views</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+            <button
+              type="button"
+              data-testid="btn-toggle-saved-views-density"
+              onClick={onToggleSavedViewsDensity}
+              aria-label={`Switch saved views to ${savedViewsDensity === 'compact' ? 'expanded' : 'compact'} mode`}
+              style={{
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                border: '1px solid #cbd5e1',
+                color: '#334155',
+                backgroundColor: '#f8fafc',
+                borderRadius: '999px',
+                padding: '0.16rem 0.45rem',
+                cursor: 'pointer'
+              }}
+            >
+              {savedViewsDensity === 'compact' ? 'Compact' : 'Expanded'}
+            </button>
+            <button
+              type="button"
+              data-testid="btn-save-filter-preset"
+              onClick={onSaveCurrentFilterPreset}
+              disabled={!hasActiveFilter}
+              style={{
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                border: '1px solid #93c5fd',
+                color: hasActiveFilter ? '#1d4ed8' : '#94a3b8',
+                backgroundColor: hasActiveFilter ? '#eff6ff' : '#f8fafc',
+                borderRadius: '999px',
+                padding: '0.16rem 0.45rem',
+                cursor: hasActiveFilter ? 'pointer' : 'not-allowed'
+              }}
+            >
+              Save current
+            </button>
+          </div>
+        </div>
+
+        {savedFilters && savedFilters.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+            {savedFilters.map((preset) => (
+              <div
+                key={preset.id}
+                data-testid={`saved-filter-row-${preset.id}`}
+                draggable
+                onDragStart={() => setDraggedPresetId(preset.id)}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (draggedPresetId) {
+                    onReorderSavedFilter(draggedPresetId, preset.id);
+                  }
+                  setDraggedPresetId(null);
+                }}
+                onDragEnd={() => setDraggedPresetId(null)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                  opacity: draggedPresetId === preset.id ? 0.65 : 1,
+                  border: draggedPresetId === preset.id ? '1px dashed #94a3b8' : '1px solid transparent',
+                  borderRadius: '0.45rem',
+                  padding: '0.1rem'
+                }}
+              >
+                <button
+                  type="button"
+                  data-testid={`filter-preset-${preset.id}`}
+                  onClick={() => onApplySavedFilter(preset)}
+                  style={{
+                    flex: 1,
+                    textAlign: 'left',
+                    border: preset.pinned ? '1px solid #f59e0b' : '1px solid #cbd5e1',
+                    backgroundColor: preset.pinned ? '#fffbeb' : 'var(--bg-secondary)',
+                    color: preset.pinned ? '#92400e' : 'var(--text-primary)',
+                    borderRadius: '0.4rem',
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    padding: '0.3rem 0.45rem',
+                    cursor: 'pointer',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {preset.pinned ? `★ ${preset.label}` : preset.label}
+                </button>
+                {savedViewsDensity === 'compact' && (
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      type="button"
+                      data-testid={`saved-view-overflow-btn-${preset.id}`}
+                      aria-label={`More actions for saved view ${preset.label}`}
+                      aria-haspopup="true"
+                      aria-expanded={openOverflowId === preset.id ? 'true' : 'false'}
+                      onClick={() => setOpenOverflowId(openOverflowId === preset.id ? null : preset.id)}
+                      style={{
+                        border: '1px solid #cbd5e1',
+                        backgroundColor: '#f8fafc',
+                        color: '#334155',
+                        borderRadius: '0.35rem',
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        padding: '0.18rem 0.4rem',
+                        cursor: 'pointer',
+                        lineHeight: 1
+                      }}
+                    >
+                      ⋮
+                    </button>
+                    {openOverflowId === preset.id && (
+                      <div
+                        data-testid={`saved-view-overflow-menu-${preset.id}`}
+                        role="menu"
+                        style={{
+                          position: 'absolute',
+                          right: 0,
+                          top: '100%',
+                          zIndex: 100,
+                          backgroundColor: 'var(--bg-secondary)',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '0.4rem',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                          minWidth: '140px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          padding: '0.25rem'
+                        }}
+                      >
+                        <button
+                          type="button"
+                          role="menuitem"
+                          data-testid={`overflow-pin-${preset.id}`}
+                          onClick={() => { onTogglePinSavedFilter(preset.id); setOpenOverflowId(null); }}
+                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', borderRadius: '0.3rem' }}
+                        >
+                          {preset.pinned ? '☆ Unpin' : '★ Pin'}
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          data-testid={`overflow-move-top-${preset.id}`}
+                          onClick={() => { onMoveSavedFilterToEdge(preset.id, 'top'); setOpenOverflowId(null); }}
+                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', borderRadius: '0.3rem' }}
+                        >
+                          ⤒ Move to top
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          data-testid={`overflow-move-up-${preset.id}`}
+                          onClick={() => { onMoveSavedFilter(preset.id, 'up'); setOpenOverflowId(null); }}
+                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', borderRadius: '0.3rem' }}
+                        >
+                          ↑ Move up
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          data-testid={`overflow-move-down-${preset.id}`}
+                          onClick={() => { onMoveSavedFilter(preset.id, 'down'); setOpenOverflowId(null); }}
+                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', borderRadius: '0.3rem' }}
+                        >
+                          ↓ Move down
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          data-testid={`overflow-move-bottom-${preset.id}`}
+                          onClick={() => { onMoveSavedFilterToEdge(preset.id, 'bottom'); setOpenOverflowId(null); }}
+                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', borderRadius: '0.3rem' }}
+                        >
+                          ⤓ Move to bottom
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          data-testid={`overflow-rename-${preset.id}`}
+                          onClick={() => { onRenameSavedFilter(preset.id); setOpenOverflowId(null); }}
+                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', borderRadius: '0.3rem' }}
+                        >
+                          ✏ Rename
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          data-testid={`overflow-delete-${preset.id}`}
+                          onClick={() => { onDeleteSavedFilter(preset.id); setOpenOverflowId(null); }}
+                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', color: '#be123c', borderRadius: '0.3rem' }}
+                        >
+                          ✕ Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {savedViewsDensity === 'expanded' && (
+                  <>
+                    <button
+                      type="button"
+                      data-testid={`pin-filter-preset-${preset.id}`}
+                      aria-label={preset.pinned ? `Unpin saved view ${preset.label}` : `Pin saved view ${preset.label}`}
+                      onClick={() => onTogglePinSavedFilter(preset.id)}
+                      style={{
+                        border: '1px solid #fcd34d',
+                        backgroundColor: preset.pinned ? '#f59e0b' : '#fffbeb',
+                        color: preset.pinned ? '#fff' : '#92400e',
+                        borderRadius: '0.35rem',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        padding: '0.22rem 0.4rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {preset.pinned ? 'Unpin' : 'Pin'}
+                    </button>
+                    <button
+                      type="button"
+                      data-testid={`move-top-filter-preset-${preset.id}`}
+                      aria-label={`Move saved view ${preset.label} to top`}
+                      onClick={() => onMoveSavedFilterToEdge(preset.id, 'top')}
+                      style={{
+                        border: '1px solid #cbd5e1',
+                        backgroundColor: '#f8fafc',
+                        color: '#334155',
+                        borderRadius: '0.35rem',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        padding: '0.22rem 0.36rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ⤒
+                    </button>
+                    <button
+                      type="button"
+                      data-testid={`move-up-filter-preset-${preset.id}`}
+                      aria-label={`Move saved view ${preset.label} up`}
+                      onClick={() => onMoveSavedFilter(preset.id, 'up')}
+                      style={{
+                        border: '1px solid #cbd5e1',
+                        backgroundColor: '#f8fafc',
+                        color: '#334155',
+                        borderRadius: '0.35rem',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        padding: '0.22rem 0.36rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      data-testid={`move-down-filter-preset-${preset.id}`}
+                      aria-label={`Move saved view ${preset.label} down`}
+                      onClick={() => onMoveSavedFilter(preset.id, 'down')}
+                      style={{
+                        border: '1px solid #cbd5e1',
+                        backgroundColor: '#f8fafc',
+                        color: '#334155',
+                        borderRadius: '0.35rem',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        padding: '0.22rem 0.36rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      data-testid={`move-bottom-filter-preset-${preset.id}`}
+                      aria-label={`Move saved view ${preset.label} to bottom`}
+                      onClick={() => onMoveSavedFilterToEdge(preset.id, 'bottom')}
+                      style={{
+                        border: '1px solid #cbd5e1',
+                        backgroundColor: '#f8fafc',
+                        color: '#334155',
+                        borderRadius: '0.35rem',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        padding: '0.22rem 0.36rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ⤓
+                    </button>
+                    <button
+                      type="button"
+                      data-testid={`rename-filter-preset-${preset.id}`}
+                      aria-label={`Rename saved view ${preset.label}`}
+                      onClick={() => onRenameSavedFilter(preset.id)}
+                      style={{
+                        border: '1px solid #cbd5e1',
+                        backgroundColor: '#f8fafc',
+                        color: '#334155',
+                        borderRadius: '0.35rem',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        padding: '0.22rem 0.4rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      data-testid={`delete-filter-preset-${preset.id}`}
+                      aria-label={`Delete saved view ${preset.label}`}
+                      onClick={() => onDeleteSavedFilter(preset.id)}
+                      style={{
+                        border: '1px solid #fecaca',
+                        backgroundColor: '#fff1f2',
+                        color: '#be123c',
+                        borderRadius: '0.35rem',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        padding: '0.22rem 0.4rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      x
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)' }}>No saved views yet.</p>
+        )}
+      </div>
 
       <div
         style={{ flex: 1, overflowY: 'auto' }}
@@ -280,6 +707,31 @@ export default function Sidebar({
                     {topic.pinned && <span style={{ color: '#f59e0b' }}><PinIcon filled /></span>}
                     <h3 style={{ fontWeight: '600', color: 'var(--text-primary)', marginBottom: '0.08rem', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.95rem' }}>{topic.title}</h3>
                   </div>
+                  {matchSnippets && matchSnippets[topic.id] && (() => {
+                    const { before, match, after } = matchSnippets[topic.id];
+                    return (
+                      <p
+                        data-testid={`search-snippet-${topic.id}`}
+                        style={{
+                          margin: '0.2rem 0 0 0',
+                          fontSize: '0.7rem',
+                          color: 'var(--text-muted)',
+                          lineHeight: 1.5,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'clip'
+                        }}
+                      >
+                        {before}<mark style={{
+                          backgroundColor: '#fef08a',
+                          color: '#713f12',
+                          borderRadius: '0.2rem',
+                          padding: '0 0.1rem',
+                          fontWeight: 700
+                        }}>{match}</mark>{after}
+                      </p>
+                    );
+                  })()}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.35rem' }}>
                     <span style={{ 
                       fontSize: '0.75rem', 

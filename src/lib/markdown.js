@@ -66,7 +66,8 @@ const renderer = {
   link({ href, title, tokens }) {
     const text = this.parser.parseInline(tokens);
     const titleAttr = title ? ` title="${title}"` : '';
-    return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer" style="color: #4f46e5; text-decoration: underline; font-weight: 500;">${text}</a>`;
+    // Don't use target="_blank" to allow click handler to work properly for preview
+    return `<a href="${href}"${titleAttr} rel="noopener noreferrer" style="color: #4f46e5; text-decoration: underline; font-weight: 500; cursor: pointer;">${text}</a>`;
   },
 
   // Custom list renderer

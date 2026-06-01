@@ -79,20 +79,25 @@ const App = () => {
     storageDescription, 
     isSwitchingStorage, 
     isInitialized,
+    canAutoSave,
     statusMessage,
     switchStorage,
-    saveTopics
+    saveTopics,
+    migrateTopicsToCurrentStorage
   } = useStorage((newTopics) => {
     setTopicsFromStorage(newTopics);
   });
 
-  const { searchQuery, setSearchQuery, selectedCategory, setSelectedCategory, categories, filteredTopics } = useSearch(topics);
+  const { searchQuery, setSearchQuery, selectedCategory, setSelectedCategory, categories, filteredTopics, matchSnippets } = useSearch(topics);
   const workspaceInsights = useWorkspaceInsights(topics);
   const { theme, toggleTheme } = useTheme();
 
   // Editing state
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
+  const [editTags, setEditTags] = useState([]);
+  const [tagInput, setTagInput] = useState('');
+  const [selectedTagFilter, setSelectedTagFilter] = useState(null);
   
   // Undo/redo for current note
   const undoRedo = useUndoRedo(editContent);
@@ -117,9 +122,33 @@ const App = () => {
   
   // Archive state
   const [showArchived, setShowArchived] = useState(false);
+  const [savedFilters, setSavedFilters] = useState(() => {
+    try {
+      const raw = localStorage.getItem('studyApp.savedFilters.v1');
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [savedViewsDensity, setSavedViewsDensity] = useState(() => {
+    try {
+      const raw = localStorage.getItem('studyApp.savedViewsDensity.v1');
+      return raw === 'compact' ? 'compact' : 'expanded';
+    } catch (e) {
+      return 'expanded';
+    }
+  });
+  
+  // Iframe error state for link previews
+  const [iframeError, setIframeError] = useState(false);
   
   // Template state
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [commandQuery, setCommandQuery] = useState('');
+  const [commandHighlightIndex, setCommandHighlightIndex] = useState(0);
   
   // Workspace insights collapsed state
   const [isInsightsExpanded, setIsInsightsExpanded] = useState(false);
@@ -131,9 +160,11 @@ const App = () => {
   const [authUser, setAuthUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authEmailError, setAuthEmailError] = useState('');
+  const [migrationStatus, setMigrationStatus] = useState(null);
   const firebaseEnabled = isConfigured();
   const authEmailRef = useRef(null);
   const authPasswordRef = useRef(null);
+  const preSignInTopicsRef = useRef([]);
 
   // Refs
   const topicRefs = useRef(new Map());
@@ -144,11 +175,12 @@ const App = () => {
   const imageUrlInputRef = useRef(null);
   const linkUrlInputRef = useRef(null);
   const resetConfirmButtonRef = useRef(null);
+  const commandPaletteInputRef = useRef(null);
   const editTextareaRef = useRef(null);
   const lastSelectionRef = useRef({ start: 0, end: 0 });
   const previewContentRef = useRef(null);
 
-  const isModalOpen = showNewTopicModal || showImageModal || showLinkModal || showResetConfirm || showAuthModal;
+  const isModalOpen = showNewTopicModal || showImageModal || showLinkModal || showResetConfirm || showAuthModal || showCommandPalette;
 
   // --- IDs for accessibility ---
   const newTopicHeadingId = 'modal-new-topic-title';
@@ -202,6 +234,11 @@ const App = () => {
 
   // --- Keyboard shortcuts ---
   const keyboardHandlers = useMemo(() => ({
+    commandPalette: () => {
+      setCommandQuery('');
+      setCommandHighlightIndex(0);
+      setShowCommandPalette(true);
+    },
     bold: () => isEditing && applyMarkdownFormatting('bold'),
     italic: () => isEditing && applyMarkdownFormatting('italic'),
     underline: () => isEditing && applyMarkdownFormatting('underline'),
@@ -248,6 +285,12 @@ const App = () => {
 
   const closeResetModal = useCallback(() => {
     setShowResetConfirm(false);
+  }, []);
+
+  const closeCommandPalette = useCallback(() => {
+    setShowCommandPalette(false);
+    setCommandQuery('');
+    setCommandHighlightIndex(0);
   }, []);
 
   const handleAddTopic = () => {
@@ -310,10 +353,215 @@ const App = () => {
   // Get archived count for sidebar
   const archivedCount = topics.filter(t => t.archived).length;
 
-  // Filter topics based on archive state
-  const visibleFilteredTopics = showArchived 
-    ? filteredTopics 
-    : filteredTopics.filter(t => !t.archived);
+  const hasActiveFilter = selectedCategory !== 'All' || Boolean(selectedTagFilter) || showArchived;
+
+  const buildFilterPresetLabel = useCallback(() => {
+    const parts = [];
+    if (selectedCategory !== 'All') {
+      parts.push(selectedCategory);
+    }
+    if (selectedTagFilter) {
+      parts.push(`#${selectedTagFilter}`);
+    }
+    if (showArchived) {
+      parts.push('Archived');
+    }
+    return parts.length ? parts.join(' • ') : 'Current View';
+  }, [selectedCategory, selectedTagFilter, showArchived]);
+
+  const handleSaveCurrentFilterPreset = useCallback(() => {
+    const generatedLabel = buildFilterPresetLabel();
+    const customName = window.prompt('Name this saved view (optional)', generatedLabel);
+    if (customName === null) {
+      return;
+    }
+
+    const preset = {
+      id: String(Date.now()),
+      label: customName.trim() || generatedLabel,
+      category: selectedCategory,
+      tag: selectedTagFilter,
+      showArchived,
+      pinned: false
+    };
+    setSavedFilters(prev => [preset, ...prev].slice(0, 8));
+  }, [buildFilterPresetLabel, selectedCategory, selectedTagFilter, showArchived]);
+
+  const handleApplySavedFilter = useCallback((preset) => {
+    if (!preset) return;
+    setSelectedCategory(preset.category || 'All');
+    setSelectedTagFilter(preset.tag || null);
+    setShowArchived(Boolean(preset.showArchived));
+  }, [setSelectedCategory]);
+
+  const handleDeleteSavedFilter = useCallback((id) => {
+    setSavedFilters(prev => prev.filter(preset => preset.id !== id));
+  }, []);
+
+  const handleRenameSavedFilter = useCallback((id) => {
+    const target = savedFilters.find(preset => preset.id === id);
+    if (!target) return;
+
+    const renamed = window.prompt('Rename saved view', target.label || 'Saved View');
+    if (renamed === null) return;
+
+    const nextLabel = renamed.trim();
+    if (!nextLabel) return;
+
+    setSavedFilters(prev => prev.map(preset => (
+      preset.id === id ? { ...preset, label: nextLabel } : preset
+    )));
+  }, [savedFilters]);
+
+  const handleTogglePinSavedFilter = useCallback((id) => {
+    setSavedFilters((prev) => {
+      const currentIndex = prev.findIndex((preset) => preset.id === id);
+      if (currentIndex === -1) return prev;
+
+      const current = prev[currentIndex];
+      const toggled = { ...current, pinned: !Boolean(current.pinned) };
+      const withoutCurrent = prev.filter((preset) => preset.id !== id);
+
+      if (toggled.pinned) {
+        const firstUnpinnedIndex = withoutCurrent.findIndex((preset) => !preset.pinned);
+        if (firstUnpinnedIndex === -1) {
+          return [...withoutCurrent, toggled];
+        }
+        return [
+          ...withoutCurrent.slice(0, firstUnpinnedIndex),
+          toggled,
+          ...withoutCurrent.slice(firstUnpinnedIndex)
+        ];
+      }
+
+      const lastPinnedIndex = withoutCurrent.reduce((acc, preset, index) => (preset.pinned ? index : acc), -1);
+      const insertIndex = lastPinnedIndex + 1;
+      return [
+        ...withoutCurrent.slice(0, insertIndex),
+        toggled,
+        ...withoutCurrent.slice(insertIndex)
+      ];
+    });
+  }, []);
+
+  const handleMoveSavedFilter = useCallback((id, direction) => {
+    setSavedFilters((prev) => {
+      const index = prev.findIndex((preset) => preset.id === id);
+      if (index === -1) return prev;
+
+      const nextIndex = direction === 'up' ? index - 1 : index + 1;
+      if (nextIndex < 0 || nextIndex >= prev.length) return prev;
+
+      const list = [...prev];
+      const [item] = list.splice(index, 1);
+      list.splice(nextIndex, 0, item);
+      return list;
+    });
+  }, []);
+
+  const handleMoveSavedFilterToEdge = useCallback((id, edge) => {
+    setSavedFilters((prev) => {
+      const index = prev.findIndex((preset) => preset.id === id);
+      if (index === -1) return prev;
+
+      const list = [...prev];
+      const [item] = list.splice(index, 1);
+      if (edge === 'top') {
+        list.unshift(item);
+      } else {
+        list.push(item);
+      }
+      return list;
+    });
+  }, []);
+
+  const handleReorderSavedFilter = useCallback((draggedId, targetId) => {
+    if (!draggedId || !targetId || draggedId === targetId) {
+      return;
+    }
+
+    setSavedFilters((prev) => {
+      const fromIndex = prev.findIndex((preset) => preset.id === draggedId);
+      const toIndex = prev.findIndex((preset) => preset.id === targetId);
+      if (fromIndex === -1 || toIndex === -1) {
+        return prev;
+      }
+
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  }, []);
+
+  // All unique tags across all topics (for filter chips)
+  const allTags = useMemo(() => {
+    const tagSet = new Set();
+    topics.forEach(t => (t.tags || []).forEach(tag => tagSet.add(tag)));
+    return Array.from(tagSet).sort();
+  }, [topics]);
+
+  const handleRenameTagGlobally = useCallback((oldTag) => {
+    if (!oldTag) return;
+    const proposed = window.prompt('Rename tag', oldTag);
+    if (typeof proposed !== 'string') return;
+
+    const nextTag = proposed.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
+    if (!nextTag || nextTag === oldTag) return;
+
+    topics.forEach((topic) => {
+      if (!Array.isArray(topic.tags) || !topic.tags.includes(oldTag)) return;
+      const nextTags = Array.from(new Set(topic.tags.map(tag => (tag === oldTag ? nextTag : tag))));
+      updateTopic(topic.id, { tags: nextTags, lastModified: new Date().toISOString() });
+    });
+
+    if (selectedTagFilter === oldTag) {
+      setSelectedTagFilter(nextTag);
+    }
+  }, [selectedTagFilter, topics, updateTopic]);
+
+  const handleDeleteTagGlobally = useCallback((tagToDelete) => {
+    if (!tagToDelete) return;
+    const confirmed = window.confirm(`Delete #${tagToDelete} from all notes?`);
+    if (!confirmed) return;
+
+    topics.forEach((topic) => {
+      if (!Array.isArray(topic.tags) || !topic.tags.includes(tagToDelete)) return;
+      const nextTags = topic.tags.filter(tag => tag !== tagToDelete);
+      updateTopic(topic.id, { tags: nextTags, lastModified: new Date().toISOString() });
+    });
+
+    if (selectedTagFilter === tagToDelete) {
+      setSelectedTagFilter(null);
+    }
+  }, [selectedTagFilter, topics, updateTopic]);
+
+  // Filter topics based on archive state + optional tag filter
+  const visibleFilteredTopics = useMemo(() => {
+    const base = showArchived ? filteredTopics : filteredTopics.filter(t => !t.archived);
+    if (!selectedTagFilter) return base;
+    return base.filter(t => (t.tags || []).includes(selectedTagFilter));
+  }, [showArchived, filteredTopics, selectedTagFilter]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('studyApp.savedFilters.v1', JSON.stringify(savedFilters));
+    } catch (e) {
+      // no-op when storage is unavailable
+    }
+  }, [savedFilters]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('studyApp.savedViewsDensity.v1', savedViewsDensity);
+    } catch (e) {
+      // no-op when storage is unavailable
+    }
+  }, [savedViewsDensity]);
+
+  const handleToggleSavedViewsDensity = useCallback(() => {
+    setSavedViewsDensity((current) => (current === 'expanded' ? 'compact' : 'expanded'));
+  }, []);
 
   // Note templates
   const noteTemplates = [
@@ -337,6 +585,8 @@ const App = () => {
   const startEditing = () => {
     setEditContent(selectedTopic.content);
     undoRedo.reset(selectedTopic.content);
+    setEditTags(selectedTopic.tags || []);
+    setTagInput('');
     setIsEditing(true);
     setPreviewUrl('');
   };
@@ -345,12 +595,150 @@ const App = () => {
     setSaveStatus('saving');
     updateTopic(selectedTopic.id, {
       content: editContent,
+      tags: editTags,
       lastModified: new Date().toISOString()
     });
     setIsEditing(false);
+    setTagInput('');
     setStatusAnnouncement('Changes saved');
     setTimeout(() => setSaveStatus('saved'), 500);
   };
+
+  const commandActions = useMemo(() => {
+    const actions = [
+      {
+        id: 'new-topic',
+        label: 'New topic',
+        shortcut: 'Cmd/Ctrl + N',
+        keywords: 'create add note topic',
+        run: () => setShowNewTopicModal(true)
+      },
+      {
+        id: 'edit-topic',
+        label: 'Edit selected topic',
+        shortcut: 'E',
+        keywords: 'edit note content',
+        run: () => {
+          if (selectedTopic && !isEditing) {
+            startEditing();
+          }
+        }
+      },
+      {
+        id: 'save-topic',
+        label: 'Save changes',
+        shortcut: 'Cmd/Ctrl + S',
+        keywords: 'save persist write',
+        run: () => {
+          if (selectedTopic && isEditing) {
+            handleSave();
+          }
+        }
+      },
+      {
+        id: 'toggle-theme',
+        label: 'Toggle theme',
+        shortcut: 'T',
+        keywords: 'dark light mode',
+        run: () => toggleTheme()
+      },
+      {
+        id: 'focus-search',
+        label: 'Focus topic search',
+        shortcut: '/',
+        keywords: 'search find filter',
+        run: () => {
+          const input = document.getElementById('topic-search');
+          if (input && typeof input.focus === 'function') {
+            input.focus();
+          }
+        }
+      },
+      {
+        id: 'toggle-archive',
+        label: showArchived ? 'Hide archived topics' : 'Show archived topics',
+        shortcut: 'A',
+        keywords: 'archive restore hidden',
+        run: () => setShowArchived(prev => !prev)
+      },
+      {
+        id: 'insert-link',
+        label: 'Insert link',
+        shortcut: 'Cmd/Ctrl + Shift + K',
+        keywords: 'markdown hyperlink url',
+        run: () => {
+          if (isEditing) {
+            setShowLinkModal(true);
+          }
+        }
+      },
+      {
+        id: 'insert-image',
+        label: 'Insert image',
+        shortcut: 'Cmd/Ctrl + Shift + I',
+        keywords: 'image upload media',
+        run: () => {
+          if (isEditing) {
+            setShowImageModal(true);
+          }
+        }
+      }
+    ];
+
+    return actions.filter(action => {
+      if (action.id === 'save-topic') return selectedTopic && isEditing;
+      if (action.id === 'edit-topic') return selectedTopic && !isEditing;
+      if (action.id === 'insert-link' || action.id === 'insert-image') return isEditing;
+      return true;
+    });
+  }, [isEditing, selectedTopic, showArchived, toggleTheme]);
+
+  const filteredCommandActions = useMemo(() => {
+    const q = commandQuery.trim().toLowerCase();
+    if (!q) return commandActions;
+    return commandActions.filter(action => `${action.label} ${action.keywords}`.toLowerCase().includes(q));
+  }, [commandActions, commandQuery]);
+
+  const executeCommandAction = useCallback((action) => {
+    if (!action || typeof action.run !== 'function') return;
+    closeCommandPalette();
+    requestAnimationFrame(() => {
+      action.run();
+    });
+  }, [closeCommandPalette]);
+
+  const handleCommandPaletteInputKeyDown = useCallback((event) => {
+    if (!filteredCommandActions.length) return;
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setCommandHighlightIndex(prev => (prev + 1) % filteredCommandActions.length);
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setCommandHighlightIndex(prev => (prev - 1 + filteredCommandActions.length) % filteredCommandActions.length);
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      executeCommandAction(filteredCommandActions[commandHighlightIndex] || filteredCommandActions[0]);
+    }
+  }, [commandHighlightIndex, executeCommandAction, filteredCommandActions]);
+
+  useEffect(() => {
+    if (!showCommandPalette) {
+      return;
+    }
+    setCommandHighlightIndex(0);
+  }, [commandQuery, filteredCommandActions.length, showCommandPalette]);
+
+  // Reset iframe error when previewUrl changes
+  useEffect(() => {
+    setIframeError(false);
+  }, [previewUrl]);
 
   // Auto-save indicator - track unsaved changes
   useEffect(() => {
@@ -385,10 +773,17 @@ const App = () => {
   };
 
   const handleContentClick = (e) => {
-    if (e.target.tagName === 'A') {
+    // Check if clicked element is a link or inside a link
+    let linkElement = e.target;
+    while (linkElement && linkElement.tagName !== 'A' && linkElement.tagName !== 'a') {
+      linkElement = linkElement.parentElement;
+    }
+    
+    if (linkElement && (linkElement.tagName === 'A' || linkElement.tagName === 'a')) {
       e.preventDefault();
-      const href = e.target.getAttribute('href');
-      const noteId = e.target.getAttribute('data-note-id');
+      e.stopPropagation();
+      const href = linkElement.getAttribute('href');
+      const noteId = linkElement.getAttribute('data-note-id');
       
       // Handle note links (internal linking)
       if (noteId) {
@@ -401,9 +796,12 @@ const App = () => {
         return;
       }
       
-      // Handle external links
-      if (href) {
-        setPreviewUrl(href);
+      // Handle external links - show preview
+      if (href && !href.startsWith('#') && (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//'))) {
+        // Ensure URL has protocol
+        const urlToPreview = href.startsWith('//') ? `https:${href}` : 
+                           href.startsWith('http') ? href : `https://${href}`;
+        setPreviewUrl(urlToPreview);
       }
     }
   };
@@ -471,8 +869,51 @@ const App = () => {
 
   // Auth handlers
   const handleSignIn = () => {
+    preSignInTopicsRef.current = Array.isArray(topics) ? topics.map((topic) => ({ ...topic })) : [];
     setShowAuthModal(true);
   };
+
+  const markMigrationStatus = useCallback((importedCount, source) => {
+    setMigrationStatus({
+      importedCount,
+      source,
+      timestamp: Date.now()
+    });
+  }, []);
+
+  const formatMigrationTime = useCallback((timestamp) => {
+    if (!timestamp) return '';
+    const now = Date.now();
+    const diff = now - timestamp;
+    if (diff < 60000) return 'just now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    return new Date(timestamp).toLocaleDateString();
+  }, []);
+
+  const runPostSignInMigration = useCallback(async (sourceTopics) => {
+    const migrationSource = Array.isArray(sourceTopics) ? sourceTopics : [];
+    if (storageKey !== 'firebase' || migrationSource.length === 0) {
+      return false;
+    }
+
+    try {
+      const result = await migrateTopicsToCurrentStorage(migrationSource);
+      if (result.ok) {
+        markMigrationStatus(result.importedCount || 0, 'auto');
+        if (result.importedCount > 0) {
+          setStatusAnnouncement(`Imported ${result.importedCount} topic${result.importedCount === 1 ? '' : 's'} from this device`);
+        } else {
+          setStatusAnnouncement('No additional device topics to import');
+        }
+      } else if (result.message) {
+        setStatusAnnouncement(result.message);
+      }
+      return true;
+    } finally {
+      preSignInTopicsRef.current = [];
+    }
+  }, [markMigrationStatus, migrateTopicsToCurrentStorage, storageKey]);
 
   const handleSignOut = async () => {
     try {
@@ -485,9 +926,13 @@ const App = () => {
 
   const handleGoogleSignIn = async () => {
     try {
+      const sourceTopics = preSignInTopicsRef.current.length > 0
+        ? preSignInTopicsRef.current
+        : (Array.isArray(topics) ? topics.map((topic) => ({ ...topic })) : []);
       await signInWithGoogle();
+      const handled = await runPostSignInMigration(sourceTopics);
       setShowAuthModal(false);
-      setStatusAnnouncement('Signed in successfully');
+      if (!handled) setStatusAnnouncement('Signed in successfully');
     } catch (e) {
       console.warn('Google sign in failed', e);
     }
@@ -504,14 +949,22 @@ const App = () => {
     }
     
     try {
+      const sourceTopics = preSignInTopicsRef.current.length > 0
+        ? preSignInTopicsRef.current
+        : (Array.isArray(topics) ? topics.map((topic) => ({ ...topic })) : []);
       await signInWithEmail(email, password);
+      const handled = await runPostSignInMigration(sourceTopics);
       setShowAuthModal(false);
-      setStatusAnnouncement('Signed in successfully');
+      if (!handled) setStatusAnnouncement('Signed in successfully');
     } catch (err) {
       try {
+        const sourceTopics = preSignInTopicsRef.current.length > 0
+          ? preSignInTopicsRef.current
+          : (Array.isArray(topics) ? topics.map((topic) => ({ ...topic })) : []);
         await createUserWithEmail(email, password);
+        const handled = await runPostSignInMigration(sourceTopics);
         setShowAuthModal(false);
-        setStatusAnnouncement('Account created and signed in');
+        if (!handled) setStatusAnnouncement('Account created and signed in');
       } catch (err2) {
         setAuthEmailError(err2?.message || err?.message || 'Sign in failed');
       }
@@ -827,7 +1280,7 @@ const App = () => {
   // Auto-save topics to storage (only after initial load completes)
   useEffect(() => {
     // Don't auto-save until we've loaded from storage
-    if (!isInitialized) {
+    if (!isInitialized || !canAutoSave) {
       return;
     }
     
@@ -836,7 +1289,7 @@ const App = () => {
     }, 1000);
 
     return () => clearTimeout(timeoutId);
-  }, [topics, saveTopics, isInitialized]);
+  }, [topics, saveTopics, isInitialized, canAutoSave]);
 
   // Focus management
   useEffect(() => {
@@ -874,6 +1327,76 @@ const App = () => {
     const content = isEditing ? editContent : (selectedTopic?.content || '');
     return renderMarkdown(content, topics);
   }, [isEditing, editContent, selectedTopic?.content, topics]);
+
+  const topicIdByTitle = useMemo(() => {
+    return topics.reduce((acc, topic) => {
+      if (typeof topic?.title === 'string' && topic.title.trim()) {
+        acc[topic.title.trim().toLowerCase()] = topic.id;
+      }
+      return acc;
+    }, {});
+  }, [topics]);
+
+  const extractLinkedTopicIds = useCallback((content) => {
+    if (typeof content !== 'string' || !content.trim()) {
+      return [];
+    }
+
+    const matchedTitles = Array.from(content.matchAll(/\[\[(.+?)\]\]/g))
+      .map((match) => match[1]?.trim().toLowerCase())
+      .filter(Boolean);
+
+    return Array.from(new Set(matchedTitles
+      .map((title) => topicIdByTitle[title])
+      .filter((id) => id !== undefined && id !== null)));
+  }, [topicIdByTitle]);
+
+  const outboundLinkedTopics = useMemo(() => {
+    if (!selectedTopic) {
+      return [];
+    }
+    const linkedIds = new Set(extractLinkedTopicIds(selectedTopic.content));
+    linkedIds.delete(selectedTopic.id);
+    return topics.filter((topic) => linkedIds.has(topic.id));
+  }, [extractLinkedTopicIds, selectedTopic, topics]);
+
+  const backlinkTopics = useMemo(() => {
+    if (!selectedTopic) {
+      return [];
+    }
+
+    const backlinkIds = topics
+      .filter((topic) => topic.id !== selectedTopic.id)
+      .filter((topic) => extractLinkedTopicIds(topic.content).includes(selectedTopic.id))
+      .map((topic) => topic.id);
+
+    const uniqueBacklinkIds = Array.from(new Set(backlinkIds));
+    return topics.filter((topic) => uniqueBacklinkIds.includes(topic.id));
+  }, [extractLinkedTopicIds, selectedTopic, topics]);
+
+  const relatedTopics = useMemo(() => {
+    if (!selectedTopic) {
+      return [];
+    }
+
+    const blockedIds = new Set([
+      selectedTopic.id,
+      ...outboundLinkedTopics.map((topic) => topic.id),
+      ...backlinkTopics.map((topic) => topic.id)
+    ]);
+
+    return topics
+      .filter((topic) => !blockedIds.has(topic.id))
+      .filter((topic) => topic.category === selectedTopic.category)
+      .slice(0, 5);
+  }, [backlinkTopics, outboundLinkedTopics, selectedTopic, topics]);
+
+  const openRelatedTopic = useCallback((topic) => {
+    setSelectedTopic(topic);
+    setPreviewUrl('');
+    setIsEditing(false);
+    requestAnimationFrame(() => focusTopicById(topic.id));
+  }, [focusTopicById, setSelectedTopic]);
 
   const hasPreview = previewUrl && !isEditing;
 
@@ -1093,6 +1616,24 @@ const App = () => {
             archivedCount={archivedCount}
             newTopicButtonRef={newTopicButtonRef}
             setShowNewTopicModal={setShowNewTopicModal}
+            allTags={allTags}
+            selectedTagFilter={selectedTagFilter}
+            setSelectedTagFilter={setSelectedTagFilter}
+            onRenameTagGlobally={handleRenameTagGlobally}
+            onDeleteTagGlobally={handleDeleteTagGlobally}
+            savedFilters={savedFilters}
+            hasActiveFilter={hasActiveFilter}
+            onSaveCurrentFilterPreset={handleSaveCurrentFilterPreset}
+            onApplySavedFilter={handleApplySavedFilter}
+            onRenameSavedFilter={handleRenameSavedFilter}
+            onTogglePinSavedFilter={handleTogglePinSavedFilter}
+            onMoveSavedFilter={handleMoveSavedFilter}
+            onMoveSavedFilterToEdge={handleMoveSavedFilterToEdge}
+            onReorderSavedFilter={handleReorderSavedFilter}
+            onDeleteSavedFilter={handleDeleteSavedFilter}
+            savedViewsDensity={savedViewsDensity}
+            onToggleSavedViewsDensity={handleToggleSavedViewsDensity}
+            matchSnippets={matchSnippets}
           />
 
           <div style={{
@@ -1492,6 +2033,25 @@ const App = () => {
                           >
                             Sign out
                           </button>
+                          {migrationStatus && (
+                            <span
+                              title={`Last migration ${formatMigrationTime(migrationStatus.timestamp)} via ${migrationStatus.source}`}
+                              style={{
+                                fontSize: '0.68rem',
+                                padding: '0.2rem 0.45rem',
+                                borderRadius: '999px',
+                                backgroundColor: migrationStatus.importedCount > 0 ? 'rgba(16,185,129,0.14)' : 'rgba(148,163,184,0.18)',
+                                color: migrationStatus.importedCount > 0 ? '#047857' : '#475569',
+                                border: migrationStatus.importedCount > 0 ? '1px solid rgba(16,185,129,0.35)' : '1px solid rgba(148,163,184,0.35)',
+                                fontWeight: 600,
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              {migrationStatus.importedCount > 0
+                                ? `${migrationStatus.importedCount} imported`
+                                : 'No new topics'} • {formatMigrationTime(migrationStatus.timestamp)}
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <button
@@ -1516,7 +2076,7 @@ const App = () => {
                 </div>
 
                 {/* Title Area */}
-                <div style={{ padding: '1.5rem 2rem 1rem' }}>
+                <div style={{ padding: '1.5rem 2rem 0.75rem' }}>
                   <h2 style={{
                     fontSize: '2rem',
                     fontWeight: '800',
@@ -1527,6 +2087,52 @@ const App = () => {
                   }}>
                     {selectedTopic.title}
                   </h2>
+
+                  {/* Tags row */}
+                  {isEditing ? (
+                    <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.4rem' }}>
+                      {editTags.map(tag => (
+                        <span key={tag} data-testid={`tag-chip-${tag}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.78rem', backgroundColor: '#dbeafe', color: '#1d4ed8', padding: '0.2rem 0.5rem', borderRadius: '999px', fontWeight: 600 }}>
+                          #{tag}
+                          <button
+                            type="button"
+                            aria-label={`Remove tag ${tag}`}
+                            onClick={() => setEditTags(prev => prev.filter(t => t !== tag))}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1d4ed8', padding: 0, lineHeight: 1, fontSize: '0.9rem', fontWeight: 700 }}
+                          >×</button>
+                        </span>
+                      ))}
+                      <input
+                        data-testid="tag-input"
+                        type="text"
+                        placeholder="Add tag…"
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if ((e.key === 'Enter' || e.key === ',') && tagInput.trim()) {
+                            e.preventDefault();
+                            const normalized = tagInput.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
+                            if (normalized && !editTags.includes(normalized)) {
+                              setEditTags(prev => [...prev, normalized]);
+                            }
+                            setTagInput('');
+                          }
+                          if (e.key === 'Backspace' && !tagInput && editTags.length > 0) {
+                            setEditTags(prev => prev.slice(0, -1));
+                          }
+                        }}
+                        style={{ fontSize: '0.78rem', border: '1px solid var(--border-color)', borderRadius: '999px', padding: '0.2rem 0.6rem', outline: 'none', background: 'var(--bg-secondary)', color: 'var(--text-primary)', minWidth: '6rem' }}
+                      />
+                    </div>
+                  ) : (selectedTopic.tags && selectedTopic.tags.length > 0) && (
+                    <div style={{ marginTop: '0.6rem', display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                      {selectedTopic.tags.map(tag => (
+                        <span key={tag} style={{ fontSize: '0.78rem', backgroundColor: '#dbeafe', color: '#1d4ed8', padding: '0.2rem 0.5rem', borderRadius: '999px', fontWeight: 600 }}>
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Content Area */}
@@ -1550,14 +2156,125 @@ const App = () => {
                     editTextareaRef={editTextareaRef}
                     previewHtml={previewHtml}
                     handleContentClick={handleContentClick}
+                    previewUrl={previewUrl}
+                    setPreviewUrl={setPreviewUrl}
                   />
                 ) : (
                   <div style={{ display: 'flex', gap: '2rem', height: '100%' }}>
-                    <Preview
-                      previewHtml={previewHtml}
-                      handleContentClick={handleContentClick}
-                      previewRef={previewContentRef}
-                    />
+                    <div style={{ flex: '2 1 0', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <Preview
+                        previewHtml={previewHtml}
+                        handleContentClick={handleContentClick}
+                        previewRef={previewContentRef}
+                      />
+
+                      {(outboundLinkedTopics.length > 0 || backlinkTopics.length > 0 || relatedTopics.length > 0) && (
+                        <section
+                          aria-label="Note relationships"
+                          style={{
+                            border: '1px solid var(--border-color)',
+                            borderRadius: 'var(--radius-lg)',
+                            padding: '1rem',
+                            background: 'var(--bg-secondary)',
+                            boxShadow: 'var(--shadow-xs)'
+                          }}
+                        >
+                          <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                            Note Connections
+                          </h3>
+
+                          {outboundLinkedTopics.length > 0 && (
+                            <div style={{ marginBottom: '0.75rem' }}>
+                              <p style={{ margin: '0 0 0.4rem', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                Links In This Note ({outboundLinkedTopics.length})
+                              </p>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                                {outboundLinkedTopics.map((topic) => (
+                                  <button
+                                    key={`outbound-${topic.id}`}
+                                    type="button"
+                                    data-testid={`linked-topic-${topic.id}`}
+                                    onClick={() => openRelatedTopic(topic)}
+                                    style={{
+                                      border: '1px solid rgba(79,70,229,0.28)',
+                                      background: 'rgba(79,70,229,0.08)',
+                                      color: '#4338ca',
+                                      borderRadius: '999px',
+                                      padding: '0.3rem 0.6rem',
+                                      fontSize: '0.78rem',
+                                      fontWeight: 600,
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    {topic.title}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {backlinkTopics.length > 0 && (
+                            <div style={{ marginBottom: relatedTopics.length > 0 ? '0.75rem' : 0 }}>
+                              <p style={{ margin: '0 0 0.4rem', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                Backlinks ({backlinkTopics.length})
+                              </p>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                                {backlinkTopics.map((topic) => (
+                                  <button
+                                    key={`backlink-${topic.id}`}
+                                    type="button"
+                                    data-testid={`backlink-topic-${topic.id}`}
+                                    onClick={() => openRelatedTopic(topic)}
+                                    style={{
+                                      border: '1px solid rgba(16,185,129,0.35)',
+                                      background: 'rgba(16,185,129,0.12)',
+                                      color: '#047857',
+                                      borderRadius: '999px',
+                                      padding: '0.3rem 0.6rem',
+                                      fontSize: '0.78rem',
+                                      fontWeight: 600,
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    {topic.title}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {relatedTopics.length > 0 && (
+                            <div>
+                              <p style={{ margin: '0 0 0.4rem', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                Same Category ({relatedTopics.length})
+                              </p>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                                {relatedTopics.map((topic) => (
+                                  <button
+                                    key={`related-${topic.id}`}
+                                    type="button"
+                                    data-testid={`related-topic-${topic.id}`}
+                                    onClick={() => openRelatedTopic(topic)}
+                                    style={{
+                                      border: '1px solid rgba(148,163,184,0.35)',
+                                      background: 'rgba(148,163,184,0.16)',
+                                      color: '#334155',
+                                      borderRadius: '999px',
+                                      padding: '0.3rem 0.6rem',
+                                      fontSize: '0.78rem',
+                                      fontWeight: 600,
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    {topic.title}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </section>
+                      )}
+                    </div>
                     {hasPreview && (
                       <div style={{ flex: '1 1 400px', minWidth: '280px' }}>
                         <div style={{
@@ -1581,17 +2298,106 @@ const App = () => {
                             ×
                           </button>
                         </div>
-                        <iframe
-                          src={previewUrl}
-                          title="Link preview"
-                          sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-                          style={{
-                            width: '100%',
+                        {iframeError ? (
+                          <div style={{
                             height: 'calc(100% - 3rem)',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '0.5rem'
-                          }}
-                        />
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '2rem',
+                            textAlign: 'center',
+                            backgroundColor: 'var(--bg-tertiary)',
+                            borderRadius: 'var(--radius-md)',
+                            border: '2px dashed var(--border-color)'
+                          }}>
+                            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔗</div>
+                            <h4 style={{ fontSize: '1.125rem', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
+                              Cannot Preview This Link
+                            </h4>
+                            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', maxWidth: '300px' }}>
+                              This website blocks embedding in frames for security reasons.
+                            </p>
+                            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+                              <button
+                                onClick={() => window.open(previewUrl, '_blank', 'noopener,noreferrer')}
+                                style={{
+                                  background: 'var(--button-primary)',
+                                  color: 'white',
+                                  padding: '0.625rem 1.25rem',
+                                  borderRadius: 'var(--radius-md)',
+                                  fontSize: '0.875rem',
+                                  fontWeight: '600',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  boxShadow: 'var(--shadow-sm)',
+                                  transition: 'all var(--transition-fast)'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = 'var(--button-primary-hover)';
+                                  e.currentTarget.style.transform = 'translateY(-2px)';
+                                  e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = 'var(--button-primary)';
+                                  e.currentTarget.style.transform = 'translateY(0)';
+                                  e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+                                }}
+                              >
+                                Open in New Tab
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setPreviewUrl('');
+                                  setIframeError(false);
+                                }}
+                                style={{
+                                  background: 'var(--button-secondary)',
+                                  color: 'var(--text-secondary)',
+                                  padding: '0.625rem 1.25rem',
+                                  borderRadius: 'var(--radius-md)',
+                                  fontSize: '0.875rem',
+                                  fontWeight: '600',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  transition: 'all var(--transition-fast)'
+                                }}
+                              >
+                                Close Preview
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <iframe
+                            src={previewUrl}
+                            title="Link preview"
+                            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                            style={{
+                              width: '100%',
+                              height: 'calc(100% - 3rem)',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: 'var(--radius-md)',
+                              backgroundColor: 'white'
+                            }}
+                            onLoad={(e) => {
+                              // Check if iframe is blocked by CSP
+                              setTimeout(() => {
+                                try {
+                                  const iframeDoc = e.target.contentDocument || e.target.contentWindow?.document;
+                                  if (!iframeDoc || !iframeDoc.body) {
+                                    setIframeError(true);
+                                  }
+                                } catch (err) {
+                                  // CSP error - iframe content not accessible
+                                  setIframeError(true);
+                                }
+                              }, 500);
+                            }}
+                            onError={() => {
+                              setIframeError(true);
+                            }}
+                          />
+                        )}
                       </div>
                     )}
                   </div>
@@ -1618,6 +2424,73 @@ const App = () => {
       </div>
 
       {/* Modals */}
+      {showCommandPalette && (
+        <Modal
+          onClose={closeCommandPalette}
+          labelledBy="command-palette-title"
+          describedBy="command-palette-help"
+          initialFocusRef={commandPaletteInputRef}
+        >
+          <h2 id="command-palette-title" style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--text-primary)' }}>
+            Command Palette
+          </h2>
+          <p id="command-palette-help" style={{ marginTop: 0, marginBottom: '0.75rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            Use arrow keys to move and Enter to run a command.
+          </p>
+          <input
+            ref={commandPaletteInputRef}
+            data-testid="command-palette-input"
+            value={commandQuery}
+            onChange={(event) => setCommandQuery(event.target.value)}
+            onKeyDown={handleCommandPaletteInputKeyDown}
+            placeholder="Type a command..."
+            style={{
+              width: '100%',
+              padding: '0.7rem 0.8rem',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '0.75rem',
+              fontSize: '0.92rem',
+              backgroundColor: 'var(--bg-primary)',
+              color: 'var(--text-primary)'
+            }}
+          />
+
+          <div style={{ maxHeight: '280px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+            {filteredCommandActions.length === 0 ? (
+              <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.88rem' }}>No commands found.</p>
+            ) : filteredCommandActions.map((action, index) => {
+              const isActive = index === commandHighlightIndex;
+              return (
+                <button
+                  key={action.id}
+                  type="button"
+                  data-testid={`command-action-${action.id}`}
+                  onClick={() => executeCommandAction(action)}
+                  style={{
+                    textAlign: 'left',
+                    width: '100%',
+                    border: isActive ? '1px solid #2563eb' : '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '0.6rem 0.75rem',
+                    backgroundColor: isActive ? 'rgba(37,99,235,0.08)' : 'var(--bg-secondary)',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    gap: '0.75rem',
+                    alignItems: 'center'
+                  }}
+                >
+                  <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{action.label}</span>
+                  <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>{action.shortcut}</span>
+                </button>
+              );
+            })}
+          </div>
+        </Modal>
+      )}
+
       {showNewTopicModal && (
         <Modal
           onClose={closeNewTopicModal}

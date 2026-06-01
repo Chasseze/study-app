@@ -30,8 +30,13 @@ export default function useKeyboardShortcuts(handlers, enabled = true) {
       event.preventDefault();
       handlers.underline();
     }
-    // Cmd/Ctrl + K (Link)
-    else if (modifier && key === 'k' && handlers.link) {
+    // Cmd/Ctrl + K (Command palette)
+    else if (modifier && !event.shiftKey && key === 'k' && handlers.commandPalette) {
+      event.preventDefault();
+      handlers.commandPalette();
+    }
+    // Cmd/Ctrl + Shift + K (Link)
+    else if (modifier && event.shiftKey && key === 'k' && handlers.link) {
       event.preventDefault();
       handlers.link();
     }

@@ -13,6 +13,12 @@ export default function Preview({ html, previewHtml, onContentClick, handleConte
       className={className}
       style={style}
       onClick={clickHandler}
+      onMouseDown={(e) => {
+        // Ensure link clicks are captured even with preventDefault
+        if (e.target.tagName === 'A' || e.target.closest('a')) {
+          e.preventDefault();
+        }
+      }}
       dangerouslySetInnerHTML={{ __html: content }}
     />
   );
