@@ -50,6 +50,9 @@ export async function signInWithGoogle() {
   const auth = getAuthInstance();
   if (!auth) throw new Error('Firebase not configured');
   const provider = new GoogleAuthProvider();
+  // Always show the Google account chooser instead of silently using the
+  // account the browser is already signed into.
+  provider.setCustomParameters({ prompt: 'select_account' });
   return signInWithPopup(auth, provider);
 }
 

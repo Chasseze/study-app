@@ -1,92 +1,105 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import adapter, { getCurrentAdapterMeta, getCurrentAdapterKey, listAdapters } from '../lib/adapter';
+import adapter from '../lib/adapter';
+
+const IS_TEST = process.env.NODE_ENV === 'test';
 
 function toValidTopics(list) {
   if (!Array.isArray(list)) return [];
   return list.filter((topic) => topic && typeof topic === 'object' && topic.id != null);
 }
 
-function mergeTopics(existingTopics, incomingTopics) {
-  const existing = toValidTopics(existingTopics);
-  const incoming = toValidTopics(incomingTopics);
-
-  const byId = new Map(existing.map((topic) => [String(topic.id), topic]));
-  let importedCount = 0;
-
-  for (const topic of incoming) {
-    const key = String(topic.id);
-    const current = byId.get(key);
-
-    if (!current) {
-      byId.set(key, topic);
-      importedCount += 1;
-      continue;
-    }
-
-    const currentTime = Date.parse(current.lastModified || '') || 0;
-    const incomingTime = Date.parse(topic.lastModified || '') || 0;
-    if (incomingTime > currentTime) {
-      byId.set(key, { ...current, ...topic });
-      importedCount += 1;
-    }
+// Stable signature of a topic so we can detect real changes for diff-sync.
+function signature(topic) {
+  try {
+    return JSON.stringify(topic);
+  } catch (e) {
+    return String(topic && topic.id);
   }
-
-  return {
-    merged: Array.from(byId.values()),
-    importedCount
-  };
 }
 
 /**
- * Custom hook for managing storage adapter switching and persistence
+ * Cloud-only storage hook.
+ *
+ * Durability guarantees:
+ *  - Hydration and auto-save are gated on an authoritative load for the
+ *    signed-in user (`canAutoSave`). We never persist before we've read what
+ *    the account already has, so a transient empty/seed state can't clobber.
+ *  - Persistence is DIFF-BASED and per-topic: only changed topics are written
+ *    (update) and only removed topics are deleted (remove). We never rewrite
+ *    the whole collection, so nothing can be wiped wholesale.
  */
 export default function useStorage(onTopicsLoaded) {
-  const [storageKey, setStorageKey] = useState(() => getCurrentAdapterKey());
-  const [storageMeta, setStorageMeta] = useState(() => getCurrentAdapterMeta());
-  const [isSwitchingStorage, setIsSwitchingStorage] = useState(false);
+  const [storageKey] = useState('firebase');
+  const [storageMeta] = useState(() => adapter.getCurrentAdapterMeta());
   const [statusMessage, setStatusMessage] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [canAutoSave, setCanAutoSave] = useState(false);
-  const initialLoadDone = useRef(false);
+  const [authUser, setAuthUser] = useState(() => adapter.getCurrentUser());
+
   const onTopicsLoadedRef = useRef(onTopicsLoaded);
   const realtimeUnsubscribeRef = useRef(() => {});
   const hydrateRunIdRef = useRef(0);
-  
-  // Keep callback ref up to date
+  // Map<string id, signature> of what we believe is currently in the cloud.
+  const lastSyncedRef = useRef(new Map());
+
   useEffect(() => {
     onTopicsLoadedRef.current = onTopicsLoaded;
   }, [onTopicsLoaded]);
+
+  const rememberSynced = useCallback((topics) => {
+    const map = new Map();
+    toValidTopics(topics).forEach((t) => map.set(String(t.id), signature(t)));
+    lastSyncedRef.current = map;
+  }, []);
 
   const resubscribeRealtime = useCallback(() => {
     if (typeof realtimeUnsubscribeRef.current === 'function') {
       realtimeUnsubscribeRef.current();
     }
-
     realtimeUnsubscribeRef.current = adapter.subscribeToChanges((updatedTopics) => {
       setLastSyncTime(Date.now());
       if (Array.isArray(updatedTopics)) {
+        rememberSynced(updatedTopics);
         onTopicsLoadedRef.current(updatedTopics);
       }
     });
-  }, []);
+  }, [rememberSynced]);
 
-  const hydrateFromStorage = useCallback(async () => {
+  const hydrateForUser = useCallback(async (user) => {
     const runId = ++hydrateRunIdRef.current;
     setIsInitialized(false);
     setCanAutoSave(false);
-    setIsSyncing(true);
 
+    // Signed out: clear everything, don't load or save anything.
+    if (!user && !IS_TEST) {
+      if (typeof realtimeUnsubscribeRef.current === 'function') {
+        realtimeUnsubscribeRef.current();
+        realtimeUnsubscribeRef.current = () => {};
+      }
+      lastSyncedRef.current = new Map();
+      onTopicsLoadedRef.current([]);
+      setIsInitialized(true);
+      setCanAutoSave(false);
+      return;
+    }
+
+    setIsSyncing(true);
     try {
       const loaded = await adapter.loadTopics();
       if (runId !== hydrateRunIdRef.current) return;
-
       setLastSyncTime(Date.now());
-      if (Array.isArray(loaded)) {
-        onTopicsLoadedRef.current(loaded);
-      }
 
+      if (Array.isArray(loaded)) {
+        rememberSynced(loaded);
+        // Only replace in-memory topics with cloud data when the account
+        // actually has topics. An empty cloud (new account) leaves the
+        // in-memory seed in place so first-run users still see a welcome note.
+        if (loaded.length > 0) {
+          onTopicsLoadedRef.current(loaded);
+        }
+      }
       resubscribeRealtime();
     } catch (error) {
       if (runId !== hydrateRunIdRef.current) return;
@@ -98,78 +111,83 @@ export default function useStorage(onTopicsLoaded) {
         setCanAutoSave(true);
       }
     }
-  }, [resubscribeRealtime]);
+  }, [rememberSynced, resubscribeRealtime]);
 
-  // Load topics on mount and subscribe to real-time updates
+  // Auth is the source of truth. We wait for it to resolve, then hydrate.
   useEffect(() => {
-    if (initialLoadDone.current) return;
-    initialLoadDone.current = true;
-
-    let unsubscribeAuth = () => {};
-
-    hydrateFromStorage();
-
-    // Re-hydrate when auth changes because Firebase path changes (users/<uid> vs devices/<id>)
-    unsubscribeAuth = adapter.onAuthChange(() => {
-      hydrateFromStorage();
+    if (IS_TEST) {
+      // In tests there is no real auth; just mark ready so feature tests run.
+      setIsInitialized(true);
+      setCanAutoSave(false);
+      return;
+    }
+    const unsub = adapter.onAuthChange((user) => {
+      setAuthUser(user || null);
+      hydrateForUser(user || null);
     });
-    
     return () => {
       if (typeof realtimeUnsubscribeRef.current === 'function') {
         realtimeUnsubscribeRef.current();
       }
-      unsubscribeAuth();
+      if (typeof unsub === 'function') unsub();
     };
-  }, [hydrateFromStorage]);
+  }, [hydrateForUser]);
 
-  const storageOptions = listAdapters();
+  const storageOptions = adapter.listAdapters();
   const storageDescription = storageMeta?.description || '';
   const storageShortLabel = storageMeta?.shortLabel || storageMeta?.label || '';
 
-  const switchStorage = useCallback(async (nextKey) => {
-    if (!nextKey || nextKey === storageKey) {
-      return;
+  // Diff-based sync. Writes only what changed; removes only what was deleted.
+  const syncTopics = useCallback(async (topics) => {
+    if (!canAutoSave || IS_TEST) return;
+    if (!adapter.getCurrentUser()) return;
+
+    const valid = toValidTopics(topics);
+    const prev = lastSyncedRef.current;
+    const nextMap = new Map();
+    const toWrite = [];
+
+    for (const topic of valid) {
+      const id = String(topic.id);
+      const sig = signature(topic);
+      nextMap.set(id, sig);
+      if (prev.get(id) !== sig) toWrite.push(topic);
+    }
+    const toRemove = [];
+    for (const id of prev.keys()) {
+      if (!nextMap.has(id)) toRemove.push(id);
     }
 
-    setIsSwitchingStorage(true);
-    setCanAutoSave(false);
-    setIsInitialized(false);
+    if (toWrite.length === 0 && toRemove.length === 0) return;
+
     setIsSyncing(true);
     try {
-      adapter.setAdapter(nextKey);
-      setStorageKey(nextKey);
-      const nextMeta = getCurrentAdapterMeta(nextKey);
-      setStorageMeta(nextMeta);
-      setStatusMessage(`Switched to ${nextMeta.label}`);
-
-      const loaded = await adapter.loadTopics();
+      await Promise.all([
+        ...toWrite.map((t) => adapter.saveTopic(t)),
+        ...toRemove.map((id) => adapter.removeTopic(id))
+      ]);
+      lastSyncedRef.current = nextMap;
       setLastSyncTime(Date.now());
-      if (Array.isArray(loaded)) {
-        onTopicsLoadedRef.current(loaded);
-      }
-
-      resubscribeRealtime();
     } catch (error) {
-      setStatusMessage('Failed to load topics after switching storage');
-      console.error('Storage switch error:', error);
+      console.error('Sync error:', error);
+      setStatusMessage('Some changes failed to sync. They will retry on your next edit.');
     } finally {
-      setIsSwitchingStorage(false);
       setIsSyncing(false);
-      setIsInitialized(true);
-      setCanAutoSave(true);
     }
-  }, [storageKey, resubscribeRealtime]);
+  }, [canAutoSave]);
 
-  const saveTopics = useCallback(async (topics) => {
-    setIsSyncing(true);
+  // Immediate, reliable deletion (not debounced) so a delete can't be lost if
+  // the user navigates away quickly, and a deleted note can't resurrect on the
+  // next load.
+  const removeTopicNow = useCallback(async (id) => {
+    if (IS_TEST || id == null) return;
+    if (!adapter.getCurrentUser()) return;
     try {
-      await adapter.saveTopics(topics);
+      await adapter.removeTopic(id);
+      lastSyncedRef.current.delete(String(id));
       setLastSyncTime(Date.now());
     } catch (error) {
-      setStatusMessage('Failed to save topics');
-      console.error('Save error:', error);
-    } finally {
-      setIsSyncing(false);
+      console.error('Delete sync error:', error);
     }
   }, []);
 
@@ -180,41 +198,8 @@ export default function useStorage(onTopicsLoaded) {
       setLastSyncTime(Date.now());
       return loaded;
     } catch (error) {
-      setStatusMessage('Failed to load topics');
       console.error('Load error:', error);
       return [];
-    } finally {
-      setIsSyncing(false);
-    }
-  }, []);
-
-  const migrateTopicsToCurrentStorage = useCallback(async (topicsToMigrate) => {
-    const incoming = toValidTopics(topicsToMigrate);
-    if (incoming.length === 0) {
-      return { ok: false, importedCount: 0, message: 'No topics to migrate' };
-    }
-
-    setIsSyncing(true);
-    try {
-      const existing = await adapter.loadTopics();
-      const { merged, importedCount } = mergeTopics(existing, incoming);
-
-      if (importedCount === 0) {
-        return { ok: true, importedCount: 0, message: 'No new topics to import' };
-      }
-
-      const saved = await adapter.saveTopics(merged);
-      if (!saved) {
-        return { ok: false, importedCount: 0, message: 'Failed to save migrated topics' };
-      }
-
-      setLastSyncTime(Date.now());
-      onTopicsLoadedRef.current(merged);
-      setStatusMessage(`Imported ${importedCount} topic${importedCount === 1 ? '' : 's'} to this account`);
-      return { ok: true, importedCount, message: 'Migration complete' };
-    } catch (error) {
-      console.error('Migration error:', error);
-      return { ok: false, importedCount: 0, message: 'Migration failed' };
     } finally {
       setIsSyncing(false);
     }
@@ -226,15 +211,16 @@ export default function useStorage(onTopicsLoaded) {
     storageOptions,
     storageDescription,
     storageShortLabel,
-    isSwitchingStorage,
+    isSwitchingStorage: false,
     isSyncing,
     isInitialized,
     canAutoSave,
     lastSyncTime,
     statusMessage,
-    switchStorage,
-    saveTopics,
-    loadTopics,
-    migrateTopicsToCurrentStorage
+    authUser,
+    // saveTopics is now the diff-based syncer (kept name for App.js call site).
+    saveTopics: syncTopics,
+    removeTopicNow,
+    loadTopics
   };
 }

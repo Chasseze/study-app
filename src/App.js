@@ -7,6 +7,8 @@ import Preview from './components/Preview';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Editor from './components/Editor';
+import AuthGate from './components/AuthGate';
+import LinkPreview from './components/LinkPreview';
 import { BookIcon, EditIcon, SaveIcon, TemplateIcon, CheckIcon, ChevronDownIcon } from './components/icons';
 import useTopics from './hooks/useTopics';
 import useStorage from './hooks/useStorage';
@@ -73,17 +75,14 @@ const App = () => {
   // Custom hooks
   const { topics, selectedTopic, setSelectedTopic, addTopic, updateTopic, deleteTopic, loadTopics: setTopicsFromStorage } = useTopics(seedTopics);
   
-  const { 
-    storageKey, 
-    storageOptions, 
-    storageDescription, 
-    isSwitchingStorage, 
+  const {
     isInitialized,
     canAutoSave,
     statusMessage,
-    switchStorage,
+    isSyncing,
+    lastSyncTime,
     saveTopics,
-    migrateTopicsToCurrentStorage
+    removeTopicNow
   } = useStorage((newTopics) => {
     setTopicsFromStorage(newTopics);
   });
@@ -140,10 +139,6 @@ const App = () => {
       return 'expanded';
     }
   });
-  
-  // Iframe error state for link previews
-  const [iframeError, setIframeError] = useState(false);
-  
   // Template state
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -158,13 +153,11 @@ const App = () => {
   
   // Auth state
   const [authUser, setAuthUser] = useState(null);
-  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authResolved, setAuthResolved] = useState(false);
   const [authEmailError, setAuthEmailError] = useState('');
-  const [migrationStatus, setMigrationStatus] = useState(null);
   const firebaseEnabled = isConfigured();
-  const authEmailRef = useRef(null);
-  const authPasswordRef = useRef(null);
-  const preSignInTopicsRef = useRef([]);
+  // In tests we bypass the auth gate so feature tests can render the app.
+  const requireAuth = firebaseEnabled && process.env.NODE_ENV !== 'test';
 
   // Refs
   const topicRefs = useRef(new Map());
@@ -180,7 +173,7 @@ const App = () => {
   const lastSelectionRef = useRef({ start: 0, end: 0 });
   const previewContentRef = useRef(null);
 
-  const isModalOpen = showNewTopicModal || showImageModal || showLinkModal || showResetConfirm || showAuthModal || showCommandPalette;
+  const isModalOpen = showNewTopicModal || showImageModal || showLinkModal || showResetConfirm || showCommandPalette;
 
   // --- IDs for accessibility ---
   const newTopicHeadingId = 'modal-new-topic-title';
@@ -189,8 +182,6 @@ const App = () => {
   const resetModalHeadingId = 'modal-reset-title';
   const resetModalDescriptionId = 'modal-reset-description';
   const resetButtonDescriptionId = 'reset-button-description';
-  const storageSelectLabelId = 'storage-select-label';
-  const storageSelectId = 'storage-select';
   const imageUrlHelpId = 'image-url-help';
   const linkUrlHelpId = 'link-url-help';
   const linkTextHelpId = 'link-text-help';
@@ -263,11 +254,6 @@ const App = () => {
   useKeyboardShortcuts(keyboardHandlers, !isModalOpen);
 
   // --- Event handlers ---
-  const handleStorageChange = useCallback((event) => {
-    const nextKey = event.target.value;
-    switchStorage(nextKey);
-  }, [switchStorage]);
-
   const closeNewTopicModal = useCallback(() => {
     setShowNewTopicModal(false);
   }, []);
@@ -318,7 +304,10 @@ const App = () => {
       const nextCandidate = filteredTopics[currentIndex + 1] || filteredTopics[currentIndex - 1] || null;
       
       deleteTopic(id);
-      
+      // Write the deletion through to the cloud immediately (don't rely on the
+      // debounced sync) so it can't be lost or resurrected on next load.
+      removeTopicNow(id);
+
       if (selectedTopic?.id === id) {
         setIsEditing(false);
         setPreviewUrl('');
@@ -691,6 +680,7 @@ const App = () => {
       if (action.id === 'insert-link' || action.id === 'insert-image') return isEditing;
       return true;
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditing, selectedTopic, showArchived, toggleTheme]);
 
   const filteredCommandActions = useMemo(() => {
@@ -734,11 +724,6 @@ const App = () => {
     }
     setCommandHighlightIndex(0);
   }, [commandQuery, filteredCommandActions.length, showCommandPalette]);
-
-  // Reset iframe error when previewUrl changes
-  useEffect(() => {
-    setIframeError(false);
-  }, [previewUrl]);
 
   // Auto-save indicator - track unsaved changes
   useEffect(() => {
@@ -867,54 +852,8 @@ const App = () => {
     setStatusAnnouncement('All topics exported as JSON');
   };
 
-  // Auth handlers
-  const handleSignIn = () => {
-    preSignInTopicsRef.current = Array.isArray(topics) ? topics.map((topic) => ({ ...topic })) : [];
-    setShowAuthModal(true);
-  };
-
-  const markMigrationStatus = useCallback((importedCount, source) => {
-    setMigrationStatus({
-      importedCount,
-      source,
-      timestamp: Date.now()
-    });
-  }, []);
-
-  const formatMigrationTime = useCallback((timestamp) => {
-    if (!timestamp) return '';
-    const now = Date.now();
-    const diff = now - timestamp;
-    if (diff < 60000) return 'just now';
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-    return new Date(timestamp).toLocaleDateString();
-  }, []);
-
-  const runPostSignInMigration = useCallback(async (sourceTopics) => {
-    const migrationSource = Array.isArray(sourceTopics) ? sourceTopics : [];
-    if (storageKey !== 'firebase' || migrationSource.length === 0) {
-      return false;
-    }
-
-    try {
-      const result = await migrateTopicsToCurrentStorage(migrationSource);
-      if (result.ok) {
-        markMigrationStatus(result.importedCount || 0, 'auto');
-        if (result.importedCount > 0) {
-          setStatusAnnouncement(`Imported ${result.importedCount} topic${result.importedCount === 1 ? '' : 's'} from this device`);
-        } else {
-          setStatusAnnouncement('No additional device topics to import');
-        }
-      } else if (result.message) {
-        setStatusAnnouncement(result.message);
-      }
-      return true;
-    } finally {
-      preSignInTopicsRef.current = [];
-    }
-  }, [markMigrationStatus, migrateTopicsToCurrentStorage, storageKey]);
-
+  // Auth handlers. Cloud data loads automatically once auth resolves
+  // (handled by useStorage), so sign-in just needs to authenticate.
   const handleSignOut = async () => {
     try {
       await signOut();
@@ -924,52 +863,35 @@ const App = () => {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    try {
-      const sourceTopics = preSignInTopicsRef.current.length > 0
-        ? preSignInTopicsRef.current
-        : (Array.isArray(topics) ? topics.map((topic) => ({ ...topic })) : []);
-      await signInWithGoogle();
-      const handled = await runPostSignInMigration(sourceTopics);
-      setShowAuthModal(false);
-      if (!handled) setStatusAnnouncement('Signed in successfully');
-    } catch (e) {
-      console.warn('Google sign in failed', e);
-    }
-  };
-
-  const handleEmailSignIn = async () => {
+  const handleGoogleSignIn = useCallback(async () => {
     setAuthEmailError('');
-    const email = authEmailRef.current?.value?.trim() || '';
-    const password = authPasswordRef.current?.value || '';
-    
-    if (!email || !password) {
+    try {
+      await signInWithGoogle();
+      setStatusAnnouncement('Signed in successfully');
+    } catch (e) {
+      setAuthEmailError(e?.message || 'Google sign in failed');
+    }
+  }, []);
+
+  const handleEmailSignIn = useCallback(async (email, password) => {
+    setAuthEmailError('');
+    const cleanEmail = (email || '').trim();
+    if (!cleanEmail || !password) {
       setAuthEmailError('Please enter email and password');
       return;
     }
-    
     try {
-      const sourceTopics = preSignInTopicsRef.current.length > 0
-        ? preSignInTopicsRef.current
-        : (Array.isArray(topics) ? topics.map((topic) => ({ ...topic })) : []);
-      await signInWithEmail(email, password);
-      const handled = await runPostSignInMigration(sourceTopics);
-      setShowAuthModal(false);
-      if (!handled) setStatusAnnouncement('Signed in successfully');
+      await signInWithEmail(cleanEmail, password);
+      setStatusAnnouncement('Signed in successfully');
     } catch (err) {
       try {
-        const sourceTopics = preSignInTopicsRef.current.length > 0
-          ? preSignInTopicsRef.current
-          : (Array.isArray(topics) ? topics.map((topic) => ({ ...topic })) : []);
-        await createUserWithEmail(email, password);
-        const handled = await runPostSignInMigration(sourceTopics);
-        setShowAuthModal(false);
-        if (!handled) setStatusAnnouncement('Account created and signed in');
+        await createUserWithEmail(cleanEmail, password);
+        setStatusAnnouncement('Account created and signed in');
       } catch (err2) {
         setAuthEmailError(err2?.message || err?.message || 'Sign in failed');
       }
     }
-  };
+  }, []);
 
   const handleImport = async (event) => {
     const file = event.target.files?.[0];
@@ -1269,10 +1191,11 @@ const App = () => {
 
   // --- Effects ---
   
-  // Auth state listener
+  // Auth state listener — drives the sign-in gate.
   useEffect(() => {
     const unsub = onAuthChange((u) => {
-      setAuthUser(u);
+      setAuthUser(u || null);
+      setAuthResolved(true);
     });
     return () => unsub && unsub();
   }, []);
@@ -1404,6 +1327,36 @@ const App = () => {
     .filter(Boolean)
     .join(' ');
 
+  // --- Auth gate (cloud-only requires sign-in) ---
+  if (requireAuth && !authResolved) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--bg-primary)', color: 'var(--text-muted)', fontFamily: 'var(--font-ui)',
+        gap: '0.6rem', fontSize: '0.9rem'
+      }}>
+        <span style={{
+          width: '14px', height: '14px', borderRadius: '50%',
+          border: '2px solid var(--border-color)', borderTopColor: 'var(--accent)',
+          display: 'inline-block', animation: 'spin 0.8s linear infinite'
+        }} />
+        Opening your notebook…
+      </div>
+    );
+  }
+
+  if (requireAuth && !authUser) {
+    return (
+      <AuthGate
+        onGoogleSignIn={handleGoogleSignIn}
+        onEmailSignIn={handleEmailSignIn}
+        error={authEmailError}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
+    );
+  }
+
   return (
     <>
       <a
@@ -1425,30 +1378,27 @@ const App = () => {
         height: '100vh',
         display: 'flex',
         flexDirection: 'column',
-        fontFamily: 'var(--font-sans)',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         backgroundColor: 'var(--bg-primary)',
         color: 'var(--text-primary)',
         position: 'relative'
       }}>
         <Header
-          storageSelectId={storageSelectId}
-          storageSelectLabelId={storageSelectLabelId}
-          storageKey={storageKey}
-          storageOptions={storageOptions}
-          isSwitchingStorage={isSwitchingStorage}
-          handleStorageChange={handleStorageChange}
-          storageDescription={storageDescription}
           resetButtonDescriptionId={resetButtonDescriptionId}
           setShowResetConfirm={setShowResetConfirm}
           theme={theme}
           onToggleTheme={toggleTheme}
+          authUser={authUser}
+          onSignOut={handleSignOut}
+          isSyncing={isSyncing}
+          lastSyncTime={lastSyncTime}
         />
 
         {/* Workspace Insights */}
         <section
           aria-label="Workspace insights"
           style={{
-            background: 'var(--bg-secondary)',
+            background: 'var(--bg-accent)',
             borderBottom: '1px solid var(--border-color)'
           }}
         >
@@ -1470,7 +1420,7 @@ const App = () => {
               transition: 'all var(--transition-fast)'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'var(--bg-hover)';
+              e.currentTarget.style.backgroundColor = 'rgba(148,163,184,0.1)';
               e.currentTarget.style.color = 'var(--text-primary)';
             }}
             onMouseLeave={(e) => {
@@ -1664,13 +1614,13 @@ const App = () => {
                   }}>
                     <span style={{
                       backgroundColor: 'var(--accent-soft)',
-                      padding: '0.375rem 0.75rem',
+                      padding: '0.3rem 0.7rem',
                       borderRadius: 'var(--radius-full)',
                       fontWeight: '600',
-                      fontSize: '0.8125rem',
-                      color: 'var(--accent-fg)',
-                      border: '1px solid var(--accent-border)',
-                      boxShadow: 'var(--shadow-xs)'
+                      fontSize: '0.78rem',
+                      letterSpacing: '0.02em',
+                      color: 'var(--accent-strong)',
+                      border: '1px solid var(--accent-border)'
                     }}>
                       {selectedTopic.category}
                     </span>
@@ -1700,7 +1650,8 @@ const App = () => {
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.background = 'var(--button-primary-hover)';
-                            e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = 'var(--shadow-md)';
                           }}
                           onMouseLeave={(e) => {
                             e.currentTarget.style.background = 'var(--button-primary)';
@@ -1916,8 +1867,8 @@ const App = () => {
                             display: 'flex',
                             alignItems: 'center',
                             gap: '0.5rem',
-                            background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                            color: 'white',
+                            background: 'var(--button-neutral)',
+                            color: '#fffdf8',
                             padding: '0.6rem 1rem',
                             borderRadius: 'var(--radius-md)',
                             fontWeight: '600',
@@ -1928,12 +1879,12 @@ const App = () => {
                             transition: 'all var(--transition-fast)'
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.background = 'linear-gradient(135deg, #4f46e5, #4338ca)';
-                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.background = 'var(--button-neutral-hover)';
+                            e.currentTarget.style.transform = 'translateY(-1px)';
                             e.currentTarget.style.boxShadow = 'var(--shadow-md)';
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'linear-gradient(135deg, #6366f1, #4f46e5)';
+                            e.currentTarget.style.background = 'var(--button-neutral)';
                             e.currentTarget.style.transform = 'translateY(0)';
                             e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
                           }}
@@ -1976,8 +1927,8 @@ const App = () => {
                           alignItems: 'center',
                           gap: '0.25rem',
                           fontSize: '0.7rem',
-                          color: saveStatus === 'unsaved' ? '#f59e0b' : saveStatus === 'saving' ? '#3b82f6' : '#10b981',
-                          fontWeight: 500
+                          color: saveStatus === 'unsaved' ? 'var(--highlight)' : saveStatus === 'saving' ? 'var(--text-tertiary)' : 'var(--accent)',
+                          fontWeight: 600
                         }}>
                           {saveStatus === 'unsaved' && '● Unsaved'}
                           {saveStatus === 'saving' && '○ Saving...'}
@@ -1985,104 +1936,19 @@ const App = () => {
                         </span>
                       </>
                     )}
-                    
-                    {/* Divider */}
-                    {firebaseEnabled && (
-                      <div style={{ width: '1px', height: '1.25rem', backgroundColor: 'var(--border-color)', margin: '0 0.25rem' }} />
-                    )}
-                    
-                    {/* Auth Status */}
-                    {firebaseEnabled && (
-                      authUser ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          <div 
-                            style={{ 
-                              width: '6px', 
-                              height: '6px', 
-                              borderRadius: '50%', 
-                              backgroundColor: '#10b981',
-                              boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.2)'
-                            }} 
-                          />
-                          <span 
-                            style={{ 
-                              fontSize: '0.75rem', 
-                              color: 'var(--text-secondary)',
-                              maxWidth: '100px',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap'
-                            }}
-                            title={authUser.email}
-                          >
-                            {authUser.email?.split('@')[0] || 'User'}
-                          </span>
-                          <button
-                            onClick={handleSignOut}
-                            style={{
-                              fontSize: '0.7rem',
-                              padding: '0.2rem 0.45rem',
-                              borderRadius: '0.25rem',
-                              border: '1px solid var(--border-color)',
-                              background: 'var(--bg-tertiary)',
-                              color: 'var(--text-secondary)',
-                              cursor: 'pointer',
-                              fontWeight: 500
-                            }}
-                          >
-                            Sign out
-                          </button>
-                          {migrationStatus && (
-                            <span
-                              title={`Last migration ${formatMigrationTime(migrationStatus.timestamp)} via ${migrationStatus.source}`}
-                              style={{
-                                fontSize: '0.68rem',
-                                padding: '0.2rem 0.45rem',
-                                borderRadius: '999px',
-                                backgroundColor: migrationStatus.importedCount > 0 ? 'rgba(16,185,129,0.14)' : 'rgba(148,163,184,0.18)',
-                                color: migrationStatus.importedCount > 0 ? '#047857' : '#475569',
-                                border: migrationStatus.importedCount > 0 ? '1px solid rgba(16,185,129,0.35)' : '1px solid rgba(148,163,184,0.35)',
-                                fontWeight: 600,
-                                whiteSpace: 'nowrap'
-                              }}
-                            >
-                              {migrationStatus.importedCount > 0
-                                ? `${migrationStatus.importedCount} imported`
-                                : 'No new topics'} • {formatMigrationTime(migrationStatus.timestamp)}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <button
-                          onClick={handleSignIn}
-                          style={{
-                            fontSize: '0.75rem',
-                            padding: '0.35rem 0.65rem',
-                            borderRadius: '0.375rem',
-                            border: 'none',
-                            background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
-                            color: 'white',
-                            cursor: 'pointer',
-                            fontWeight: 600,
-                            boxShadow: '0 1px 3px rgba(79, 70, 229, 0.3)'
-                          }}
-                        >
-                          Sign in
-                        </button>
-                      )
-                    )}
                   </div>
                 </div>
 
                 {/* Title Area */}
-                <div style={{ padding: '1.5rem 2rem 0.75rem' }}>
+                <div style={{ padding: '2rem 2rem 0.75rem', maxWidth: '900px', width: '100%' }}>
                   <h2 style={{
-                    fontSize: '2rem',
-                    fontWeight: '800',
+                    fontFamily: 'var(--font-display)',
+                    fontSize: '2.6rem',
+                    fontWeight: '600',
                     color: 'var(--text-primary)',
                     margin: 0,
-                    letterSpacing: '-0.02em',
-                    lineHeight: 1.2
+                    letterSpacing: '-0.022em',
+                    lineHeight: 1.12
                   }}>
                     {selectedTopic.title}
                   </h2>
@@ -2091,13 +1957,13 @@ const App = () => {
                   {isEditing ? (
                     <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.4rem' }}>
                       {editTags.map(tag => (
-                        <span key={tag} data-testid={`tag-chip-${tag}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.78rem', backgroundColor: '#dbeafe', color: '#1d4ed8', padding: '0.2rem 0.5rem', borderRadius: '999px', fontWeight: 600 }}>
+                        <span key={tag} data-testid={`tag-chip-${tag}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.76rem', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', padding: '0.2rem 0.55rem', borderRadius: '999px', fontWeight: 600 }}>
                           #{tag}
                           <button
                             type="button"
                             aria-label={`Remove tag ${tag}`}
                             onClick={() => setEditTags(prev => prev.filter(t => t !== tag))}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1d4ed8', padding: 0, lineHeight: 1, fontSize: '0.9rem', fontWeight: 700 }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, lineHeight: 1, fontSize: '0.9rem', fontWeight: 700 }}
                           >×</button>
                         </span>
                       ))}
@@ -2120,13 +1986,13 @@ const App = () => {
                             setEditTags(prev => prev.slice(0, -1));
                           }
                         }}
-                        style={{ fontSize: '0.78rem', border: '1px solid var(--border-color)', borderRadius: '999px', padding: '0.2rem 0.6rem', outline: 'none', background: 'var(--bg-secondary)', color: 'var(--text-primary)', minWidth: '6rem' }}
+                        style={{ fontSize: '0.76rem', border: '1px solid var(--border-color)', borderRadius: '999px', padding: '0.2rem 0.6rem', outline: 'none', background: 'var(--bg-secondary)', color: 'var(--text-primary)', minWidth: '6rem' }}
                       />
                     </div>
                   ) : (selectedTopic.tags && selectedTopic.tags.length > 0) && (
-                    <div style={{ marginTop: '0.6rem', display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                    <div style={{ marginTop: '0.7rem', display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
                       {selectedTopic.tags.map(tag => (
-                        <span key={tag} style={{ fontSize: '0.78rem', backgroundColor: '#dbeafe', color: '#1d4ed8', padding: '0.2rem 0.5rem', borderRadius: '999px', fontWeight: 600 }}>
+                        <span key={tag} style={{ fontSize: '0.76rem', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', padding: '0.2rem 0.55rem', borderRadius: '999px', fontWeight: 600 }}>
                           #{tag}
                         </span>
                       ))}
@@ -2159,9 +2025,10 @@ const App = () => {
                     setPreviewUrl={setPreviewUrl}
                   />
                 ) : (
-                  <div style={{ display: 'flex', gap: '2rem', height: '100%' }}>
-                    <div style={{ flex: '2 1 0', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: '2rem', minHeight: '100%' }}>
+                    <div style={{ flex: '1 1 440px', minWidth: 'min(100%, 360px)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                       <Preview
+                        className="prose"
                         previewHtml={previewHtml}
                         handleContentClick={handleContentClick}
                         previewRef={previewContentRef}
@@ -2173,12 +2040,12 @@ const App = () => {
                           style={{
                             border: '1px solid var(--border-color)',
                             borderRadius: 'var(--radius-lg)',
-                            padding: '1rem',
+                            padding: '1.1rem 1.25rem',
                             background: 'var(--bg-secondary)',
                             boxShadow: 'var(--shadow-xs)'
                           }}
                         >
-                          <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                          <h3 style={{ margin: '0 0 0.85rem', fontFamily: 'var(--font-display)', fontSize: '1.15rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                             Note Connections
                           </h3>
 
@@ -2195,11 +2062,11 @@ const App = () => {
                                     data-testid={`linked-topic-${topic.id}`}
                                     onClick={() => openRelatedTopic(topic)}
                                     style={{
-                                      border: '1px solid rgba(79,70,229,0.28)',
-                                      background: 'rgba(79,70,229,0.08)',
-                                      color: '#4338ca',
+                                      border: '1px solid var(--accent-border)',
+                                      background: 'var(--accent-soft)',
+                                      color: 'var(--accent-strong)',
                                       borderRadius: '999px',
-                                      padding: '0.3rem 0.6rem',
+                                      padding: '0.3rem 0.7rem',
                                       fontSize: '0.78rem',
                                       fontWeight: 600,
                                       cursor: 'pointer'
@@ -2225,11 +2092,11 @@ const App = () => {
                                     data-testid={`backlink-topic-${topic.id}`}
                                     onClick={() => openRelatedTopic(topic)}
                                     style={{
-                                      border: '1px solid rgba(16,185,129,0.35)',
-                                      background: 'rgba(16,185,129,0.12)',
-                                      color: '#047857',
+                                      border: '1px solid var(--clay-border)',
+                                      background: 'var(--clay-soft)',
+                                      color: 'var(--clay)',
                                       borderRadius: '999px',
-                                      padding: '0.3rem 0.6rem',
+                                      padding: '0.3rem 0.7rem',
                                       fontSize: '0.78rem',
                                       fontWeight: 600,
                                       cursor: 'pointer'
@@ -2255,11 +2122,11 @@ const App = () => {
                                     data-testid={`related-topic-${topic.id}`}
                                     onClick={() => openRelatedTopic(topic)}
                                     style={{
-                                      border: '1px solid rgba(148,163,184,0.35)',
-                                      background: 'rgba(148,163,184,0.16)',
-                                      color: '#334155',
+                                      border: '1px solid var(--border-color)',
+                                      background: 'var(--bg-tertiary)',
+                                      color: 'var(--text-secondary)',
                                       borderRadius: '999px',
-                                      padding: '0.3rem 0.6rem',
+                                      padding: '0.3rem 0.7rem',
                                       fontSize: '0.78rem',
                                       fontWeight: 600,
                                       cursor: 'pointer'
@@ -2275,128 +2142,8 @@ const App = () => {
                       )}
                     </div>
                     {hasPreview && (
-                      <div style={{ flex: '1 1 400px', minWidth: '280px' }}>
-                        <div style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          marginBottom: '1rem'
-                        }}>
-                          <h3 style={{ fontSize: '1.125rem', fontWeight: '600' }}>Link Preview</h3>
-                          <button
-                            onClick={() => setPreviewUrl('')}
-                            style={{
-                              backgroundColor: 'transparent',
-                              color: '#64748b',
-                              border: 'none',
-                              cursor: 'pointer',
-                              fontSize: '1.5rem',
-                              padding: '0.25rem'
-                            }}
-                          >
-                            ×
-                          </button>
-                        </div>
-                        {iframeError ? (
-                          <div style={{
-                            height: 'calc(100% - 3rem)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: '2rem',
-                            textAlign: 'center',
-                            backgroundColor: 'var(--bg-tertiary)',
-                            borderRadius: 'var(--radius-md)',
-                            border: '2px dashed var(--border-color)'
-                          }}>
-                            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔗</div>
-                            <h4 style={{ fontSize: '1.125rem', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
-                              Cannot Preview This Link
-                            </h4>
-                            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', maxWidth: '300px' }}>
-                              This website blocks embedding in frames for security reasons.
-                            </p>
-                            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-                              <button
-                                onClick={() => window.open(previewUrl, '_blank', 'noopener,noreferrer')}
-                                style={{
-                                  background: 'var(--button-primary)',
-                                  color: 'white',
-                                  padding: '0.625rem 1.25rem',
-                                  borderRadius: 'var(--radius-md)',
-                                  fontSize: '0.875rem',
-                                  fontWeight: '600',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  boxShadow: 'var(--shadow-sm)',
-                                  transition: 'all var(--transition-fast)'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = 'var(--button-primary-hover)';
-                                  e.currentTarget.style.transform = 'translateY(-2px)';
-                                  e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.background = 'var(--button-primary)';
-                                  e.currentTarget.style.transform = 'translateY(0)';
-                                  e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
-                                }}
-                              >
-                                Open in New Tab
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setPreviewUrl('');
-                                  setIframeError(false);
-                                }}
-                                style={{
-                                  background: 'var(--button-secondary)',
-                                  color: 'var(--text-secondary)',
-                                  padding: '0.625rem 1.25rem',
-                                  borderRadius: 'var(--radius-md)',
-                                  fontSize: '0.875rem',
-                                  fontWeight: '600',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  transition: 'all var(--transition-fast)'
-                                }}
-                              >
-                                Close Preview
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <iframe
-                            src={previewUrl}
-                            title="Link preview"
-                            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-                            style={{
-                              width: '100%',
-                              height: 'calc(100% - 3rem)',
-                              border: '1px solid var(--border-color)',
-                              borderRadius: 'var(--radius-md)',
-                              backgroundColor: 'white'
-                            }}
-                            onLoad={(e) => {
-                              // Check if iframe is blocked by CSP
-                              setTimeout(() => {
-                                try {
-                                  const iframeDoc = e.target.contentDocument || e.target.contentWindow?.document;
-                                  if (!iframeDoc || !iframeDoc.body) {
-                                    setIframeError(true);
-                                  }
-                                } catch (err) {
-                                  // CSP error - iframe content not accessible
-                                  setIframeError(true);
-                                }
-                              }, 500);
-                            }}
-                            onError={() => {
-                              setIframeError(true);
-                            }}
-                          />
-                        )}
+                      <div style={{ flex: '1 1 400px', minWidth: 'min(100%, 320px)', height: '72vh', position: 'sticky', top: 0, display: 'flex' }}>
+                        <LinkPreview url={previewUrl} onClose={() => setPreviewUrl('')} />
                       </div>
                     )}
                   </div>
@@ -2409,12 +2156,18 @@ const App = () => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 height: '100%',
-                color: 'var(--text-muted)',
-                fontSize: '1.125rem'
+                color: 'var(--text-muted)'
               }}>
-                <div style={{ textAlign: 'center' }}>
-                  <BookIcon />
-                  <p style={{ marginTop: '1rem' }}>Select a topic to get started</p>
+                <div style={{ textAlign: 'center', maxWidth: '24rem', padding: '2rem' }}>
+                  <div style={{ color: 'var(--accent)', opacity: 0.5, display: 'flex', justifyContent: 'center' }}>
+                    <BookIcon />
+                  </div>
+                  <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.65rem', fontWeight: 600, color: 'var(--text-secondary)', margin: '1.25rem 0 0.5rem' }}>
+                    A blank page awaits
+                  </h2>
+                  <p style={{ fontFamily: 'var(--font-serif)', fontSize: '1.05rem', lineHeight: 1.6, margin: 0 }}>
+                    Choose a note from the left, or start a new one to begin writing.
+                  </p>
                 </div>
               </div>
             )}
@@ -2430,7 +2183,7 @@ const App = () => {
           describedBy="command-palette-help"
           initialFocusRef={commandPaletteInputRef}
         >
-          <h2 id="command-palette-title" style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--text-primary)' }}>
+          <h2 id="command-palette-title" style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--text-primary)' }}>
             Command Palette
           </h2>
           <p id="command-palette-help" style={{ marginTop: 0, marginBottom: '0.75rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -2469,10 +2222,10 @@ const App = () => {
                   style={{
                     textAlign: 'left',
                     width: '100%',
-                    border: isActive ? '1px solid #2563eb' : '1px solid var(--border-color)',
+                    border: isActive ? '1px solid var(--accent)' : '1px solid var(--border-color)',
                     borderRadius: 'var(--radius-md)',
                     padding: '0.6rem 0.75rem',
-                    backgroundColor: isActive ? 'rgba(37,99,235,0.08)' : 'var(--bg-secondary)',
+                    backgroundColor: isActive ? 'var(--accent-soft)' : 'var(--bg-secondary)',
                     color: 'var(--text-primary)',
                     cursor: 'pointer',
                     display: 'flex',
@@ -2496,13 +2249,13 @@ const App = () => {
           labelledBy={newTopicHeadingId}
           initialFocusRef={newTopicTitleRef}
         >
-          <h2 id={newTopicHeadingId} style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1.5rem' }}>
+          <h2 id={newTopicHeadingId} style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', fontWeight: '600', marginBottom: '1.5rem', color: 'var(--text-primary)' }}>
             New Topic
           </h2>
           <form onSubmit={(e) => { e.preventDefault(); handleAddTopic(); }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>Title</label>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Title</label>
                 <input
                   type="text"
                   value={newTopicTitle}
@@ -2510,15 +2263,18 @@ const App = () => {
                   ref={newTopicTitleRef}
                   style={{
                     width: '100%',
-                    padding: '0.5rem',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '0.375rem'
+                    padding: '0.65rem 0.75rem',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    boxSizing: 'border-box'
                   }}
                   placeholder="Enter topic title"
                 />
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>Category</label>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Category</label>
                 <input
                   type="text"
                   value={newTopicCategory}
@@ -2526,10 +2282,12 @@ const App = () => {
                   ref={newTopicCategoryRef}
                   style={{
                     width: '100%',
-                    padding: '0.5rem',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '0.375rem',
-                    color: '#3b82f6'
+                    padding: '0.65rem 0.75rem',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    boxSizing: 'border-box'
                   }}
                   placeholder="Enter category"
                 />
@@ -2542,10 +2300,8 @@ const App = () => {
                 disabled={!newTopicTitle.trim()}
                 style={{
                   flex: 1,
-                  background: !newTopicTitle.trim() 
-                    ? 'linear-gradient(135deg, #a78bfa, #8b5cf6)' 
-                    : 'var(--button-primary)',
-                  color: 'white',
+                  background: 'var(--button-primary)',
+                  color: '#fffdf8',
                   padding: '0.75rem',
                   borderRadius: 'var(--radius-md)',
                   fontWeight: '600',
@@ -2606,11 +2362,11 @@ const App = () => {
           labelledBy={imageModalHeadingId}
           initialFocusRef={imageUrlInputRef}
         >
-          <h2 id={imageModalHeadingId} style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1.5rem' }}>
+          <h2 id={imageModalHeadingId} style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', fontWeight: '600', marginBottom: '1.5rem', color: 'var(--text-primary)' }}>
             Add Image
           </h2>
           <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>Image URL</label>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Image URL</label>
             <input
               type="text"
               value={imageUrl}
@@ -2618,9 +2374,12 @@ const App = () => {
               ref={imageUrlInputRef}
               style={{
                 width: '100%',
-                padding: '0.5rem',
-                border: '1px solid #cbd5e1',
-                borderRadius: '0.375rem'
+                padding: '0.65rem 0.75rem',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                boxSizing: 'border-box'
               }}
               placeholder="https://example.com/image.jpg"
               aria-describedby={imageUrlHelpId}
@@ -2677,12 +2436,12 @@ const App = () => {
           labelledBy={linkModalHeadingId}
           initialFocusRef={linkUrlInputRef}
         >
-          <h2 id={linkModalHeadingId} style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1.5rem' }}>
+          <h2 id={linkModalHeadingId} style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', fontWeight: '600', marginBottom: '1.5rem', color: 'var(--text-primary)' }}>
             Add Link
           </h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>Link URL</label>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Link URL</label>
               <input
                 type="text"
                 value={linkUrl}
@@ -2690,9 +2449,12 @@ const App = () => {
                 ref={linkUrlInputRef}
                 style={{
                   width: '100%',
-                  padding: '0.5rem',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '0.375rem'
+                  padding: '0.65rem 0.75rem',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  boxSizing: 'border-box'
                 }}
                 placeholder="https://example.com"
                 aria-describedby={linkUrlHelpId}
@@ -2702,7 +2464,7 @@ const App = () => {
               </span>
             </div>
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
                 Link Text (Optional)
               </label>
               <input
@@ -2711,9 +2473,12 @@ const App = () => {
                 onChange={(e) => setLinkTitle(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: '0.5rem',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '0.375rem'
+                  padding: '0.65rem 0.75rem',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  boxSizing: 'border-box'
                 }}
                 placeholder="Click here"
                 aria-describedby={linkTextHelpId}
@@ -2729,10 +2494,10 @@ const App = () => {
               disabled={!linkUrl.trim()}
               style={{
                 flex: 1,
-                backgroundColor: '#8b5cf6',
-                color: 'white',
+                backgroundColor: 'var(--button-primary)',
+                color: '#fffdf8',
                 padding: '0.75rem',
-                borderRadius: '0.375rem',
+                borderRadius: 'var(--radius-md)',
                 fontWeight: '600',
                 border: 'none',
                 cursor: 'pointer',
@@ -2746,10 +2511,10 @@ const App = () => {
               aria-describedby={linkModalCancelDescriptionId}
               style={{
                 flex: 1,
-                backgroundColor: '#e2e8f0',
-                color: '#334155',
+                backgroundColor: 'var(--button-secondary)',
+                color: 'var(--text-secondary)',
                 padding: '0.75rem',
-                borderRadius: '0.375rem',
+                borderRadius: 'var(--radius-md)',
                 fontWeight: '600',
                 border: 'none',
                 cursor: 'pointer'
@@ -2771,10 +2536,10 @@ const App = () => {
           describedBy={resetModalDescriptionId}
           initialFocusRef={resetConfirmButtonRef}
         >
-          <h2 id={resetModalHeadingId} style={{ fontSize: '1.25rem', fontWeight: '700', marginBottom: '1rem' }}>
+          <h2 id={resetModalHeadingId} style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: '600', marginBottom: '1rem', color: 'var(--text-primary)' }}>
             Reset stored data?
           </h2>
-          <p id={resetModalDescriptionId} style={{ marginBottom: '1rem', color: '#475569' }}>
+          <p id={resetModalDescriptionId} style={{ marginBottom: '1rem', color: 'var(--text-tertiary)' }}>
             This will clear persisted topics in your selected storage adapter. This action cannot be undone.
           </p>
           <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
@@ -2788,10 +2553,10 @@ const App = () => {
               ref={resetConfirmButtonRef}
               style={{
                 flex: 1,
-                backgroundColor: '#ef4444',
-                color: 'white',
+                backgroundColor: 'var(--button-danger)',
+                color: '#fffdf8',
                 padding: '0.75rem',
-                borderRadius: '0.375rem',
+                borderRadius: 'var(--radius-md)',
                 fontWeight: '600',
                 border: 'none',
                 cursor: 'pointer'
@@ -2804,10 +2569,10 @@ const App = () => {
               aria-describedby={resetModalCancelDescriptionId}
               style={{
                 flex: 1,
-                backgroundColor: '#e2e8f0',
-                color: '#334155',
+                backgroundColor: 'var(--button-secondary)',
+                color: 'var(--text-secondary)',
                 padding: '0.75rem',
-                borderRadius: '0.375rem',
+                borderRadius: 'var(--radius-md)',
                 fontWeight: '600',
                 border: 'none',
                 cursor: 'pointer'
@@ -2829,8 +2594,8 @@ const App = () => {
           labelledBy="template-modal-heading"
         >
           <h2 
-            id="template-modal-heading" 
-            style={{ fontSize: '1.25rem', fontWeight: '700', marginBottom: '1rem' }}
+            id="template-modal-heading"
+            style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: '600', marginBottom: '1rem', color: 'var(--text-primary)' }}
           >
             Choose a Template
           </h2>
@@ -2852,7 +2617,7 @@ const App = () => {
                   transition: 'all 0.15s ease'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#4f46e5';
+                  e.currentTarget.style.borderColor = 'var(--accent)';
                   e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
                 }}
                 onMouseLeave={(e) => {
@@ -2888,192 +2653,6 @@ const App = () => {
         </Modal>
       )}
 
-      {/* Auth Modal */}
-      {showAuthModal && (
-        <Modal 
-          onClose={() => { setShowAuthModal(false); setAuthEmailError(''); }} 
-          labelledBy="auth-modal-heading" 
-          initialFocusRef={authEmailRef}
-        >
-          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-            <div 
-              style={{ 
-                width: '48px', 
-                height: '48px', 
-                borderRadius: '50%', 
-                background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 1rem',
-                boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)'
-              }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
-              </svg>
-            </div>
-            <h2 
-              id="auth-modal-heading" 
-              style={{ 
-                margin: 0, 
-                fontSize: '1.25rem', 
-                fontWeight: 700,
-                color: 'var(--text-primary)'
-              }}
-            >
-              Sync your notes
-            </h2>
-            <p style={{ margin: '0.5rem 0 0', fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
-              Sign in to access your notes from any device
-            </p>
-          </div>
-
-          {/* Google Sign In */}
-          <button
-            onClick={handleGoogleSignIn}
-            style={{
-              width: '100%',
-              padding: '0.75rem 1rem',
-              borderRadius: '0.5rem',
-              border: '1px solid var(--border-color)',
-              background: 'var(--bg-secondary)',
-              color: 'var(--text-primary)',
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '0.875rem',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.75rem',
-              marginBottom: '1rem'
-            }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            Continue with Google
-          </button>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', margin: '1rem 0' }}>
-            <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-color)' }} />
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>or</span>
-            <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-color)' }} />
-          </div>
-
-          {/* Email Sign In */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <div>
-              <label 
-                htmlFor="auth-email" 
-                style={{ 
-                  display: 'block', 
-                  fontSize: '0.75rem', 
-                  fontWeight: 600, 
-                  color: 'var(--text-secondary)',
-                  marginBottom: '0.25rem'
-                }}
-              >
-                Email
-              </label>
-              <input
-                id="auth-email"
-                ref={authEmailRef}
-                type="email"
-                placeholder="you@example.com"
-                autoComplete="email"
-                style={{ 
-                  width: '100%',
-                  padding: '0.65rem 0.75rem', 
-                  borderRadius: '0.5rem', 
-                  border: '1px solid var(--border-color)',
-                  backgroundColor: 'var(--bg-secondary)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.875rem',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
-            <div>
-              <label 
-                htmlFor="auth-password" 
-                style={{ 
-                  display: 'block', 
-                  fontSize: '0.75rem', 
-                  fontWeight: 600, 
-                  color: 'var(--text-secondary)',
-                  marginBottom: '0.25rem'
-                }}
-              >
-                Password
-              </label>
-              <input
-                id="auth-password"
-                ref={authPasswordRef}
-                type="password"
-                placeholder="********"
-                autoComplete="current-password"
-                style={{ 
-                  width: '100%',
-                  padding: '0.65rem 0.75rem', 
-                  borderRadius: '0.5rem', 
-                  border: '1px solid var(--border-color)',
-                  backgroundColor: 'var(--bg-secondary)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.875rem',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-                onKeyDown={(e) => e.key === 'Enter' && handleEmailSignIn()}
-              />
-            </div>
-            
-            {authEmailError && (
-              <div 
-                style={{ 
-                  padding: '0.5rem 0.75rem',
-                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                  borderRadius: '0.375rem',
-                  fontSize: '0.8rem',
-                  color: '#ef4444'
-                }}
-              >
-                {authEmailError}
-              </div>
-            )}
-            
-            <button
-              onClick={handleEmailSignIn}
-              style={{ 
-                width: '100%',
-                padding: '0.75rem', 
-                borderRadius: '0.5rem', 
-                background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', 
-                color: 'white', 
-                border: 'none',
-                fontWeight: 600,
-                fontSize: '0.875rem',
-                cursor: 'pointer'
-              }}
-            >
-              Sign in with Email
-            </button>
-          </div>
-
-          <p style={{ 
-            margin: '1rem 0 0', 
-            fontSize: '0.7rem', 
-            color: 'var(--text-muted)',
-            textAlign: 'center'
-          }}>
-            New user? We will create an account for you automatically.
-          </p>
-        </Modal>
-      )}
     </>
   );
 };

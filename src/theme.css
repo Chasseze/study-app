@@ -1,253 +1,402 @@
-/* ============================================================
-   Study Notes — Drift Design System
-   Cool slate + soft periwinkle accent. Plus Jakarta Sans.
-   Keeps old CSS var names so existing components work unchanged.
-   ============================================================ */
-
 :root {
-  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* ============================================================
+     EDITORIAL — Light (warm paper)
+     A calm, reading-first palette: parchment surfaces, warm ink
+     text, and a single refined evergreen accent.
+     ============================================================ */
 
-  /* Backgrounds */
-  --bg-primary:   #f6f7fa;
-  --bg-secondary: #ffffff;
-  --bg-tertiary:  #eef0f5;
-  --bg-accent:    #eef0fc;
-  --bg-card:      #ffffff;
-  --bg-hover:     #f1f3f8;
-  --bg-active:    #e9ecf3;
-  --bg-overlay:   rgba(31, 36, 48, 0.32);
+  /* Type */
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
-  /* Text */
-  --text-primary:   #20242e;
-  --text-secondary: #4b5263;
-  --text-tertiary:  #6f7689;
-  --text-muted:     #9aa0b2;
+  /* Surfaces */
+  --bg-primary: #f4f0e7;       /* page / parchment */
+  --bg-secondary: #fffdf8;     /* cards & panels */
+  --bg-tertiary: #ece5d7;      /* recessed panels */
+  --bg-accent: linear-gradient(180deg, #f7f3ea 0%, #f1ece0 100%);
+  --bg-card: #fffdf8;
+  --bg-hover: #efe9dc;
+  --bg-overlay: rgba(38, 31, 22, 0.42);
 
-  /* Borders */
-  --border-color:  #e5e8ef;
-  --border-strong: #d4d9e3;
-  --border-subtle: #eef0f5;
-  --border-light:  #eef0f5;
-  --border-focus:  #6f76e6;
+  /* Ink */
+  --text-primary: #221d16;
+  --text-secondary: #4b4234;
+  --text-tertiary: #6f6452;
+  --text-muted: #9b9081;
 
-  /* Accent — soft periwinkle */
-  --accent:        #6f76e6;
-  --accent-hover:  #5c63d8;
-  --accent-press:  #4f56c9;
-  --accent-soft:   #eef0fc;
-  --accent-soft-2: #e2e5fb;
-  --accent-border: #cdd2f6;
-  --accent-fg:     #4b51c2;
-  --fg-on-accent:  #ffffff;
-  --ring:          rgba(111, 118, 230, 0.38);
+  /* Lines */
+  --border-color: #e2dac9;
+  --border-subtle: rgba(123, 110, 88, 0.18);
+  --border-light: #ece6d8;
+  --border-focus: #1f6f4b;
 
-  /* Buttons (flat — no gradients) */
-  --button-primary:         #6f76e6;
-  --button-primary-hover:   #5c63d8;
-  --button-success:         #4f9d6b;
-  --button-success-hover:   #3d8558;
-  --button-danger:          #d06a64;
-  --button-danger-hover:    #b84d47;
-  --button-secondary:       #eef0f5;
-  --button-secondary-hover: #e9ecf3;
-  --button-info:            #6f76e6;
-  --button-info-hover:      #5c63d8;
+  /* Accent — refined evergreen (carries the brand forward) */
+  --accent: #1f6f4b;
+  --accent-hover: #195c3e;
+  --accent-strong: #15522f;   /* text needing AA on paper */
+  --accent-soft: rgba(31, 111, 75, 0.10);
+  --accent-border: rgba(31, 111, 75, 0.26);
 
-  /* Status */
-  --success:      #4f9d6b;
-  --success-soft: #e6f3ec;
-  --success-fg:   #2f7a4c;
-  --warning:      #c98a3c;
-  --warning-soft: #fbf0df;
-  --warning-fg:   #9a6420;
-  --danger:       #d06a64;
-  --danger-soft:  #fbeae9;
-  --danger-fg:    #b04944;
-  --pin:          #d99a2b;
-  --pin-soft:     #faf0d9;
+  /* Warm secondary accent (clay) — for backlinks / contrast chips */
+  --clay: #a8603a;
+  --clay-soft: rgba(168, 96, 58, 0.12);
+  --clay-border: rgba(168, 96, 58, 0.28);
 
-  /* Shadows — restrained, cool-tinted */
-  --shadow-xs:  0 1px 1px rgba(28, 34, 64, 0.04);
-  --shadow-sm:  0 1px 2px rgba(28, 34, 64, 0.05), 0 1px 1px rgba(28, 34, 64, 0.03);
-  --shadow-md:  0 4px 12px -3px rgba(28, 34, 64, 0.10), 0 2px 4px -2px rgba(28, 34, 64, 0.06);
-  --shadow-lg:  0 14px 30px -8px rgba(28, 34, 64, 0.16), 0 4px 8px -4px rgba(28, 34, 64, 0.08);
-  --shadow-xl:  0 20px 40px -10px rgba(28, 34, 64, 0.18), 0 6px 12px -6px rgba(28, 34, 64, 0.10);
-  --shadow-2xl: 0 30px 60px -15px rgba(28, 34, 64, 0.22);
+  /* Highlight / pin (kept amber, pairs with parchment) */
+  --highlight: #c2820c;
+  --highlight-soft: #fbf1d4;
 
-  /* Header — clean (no gradient) */
-  --header-gradient: #ffffff;
-  --header-border:   #e5e8ef;
-  --header-shadow:   0 1px 2px rgba(28, 34, 64, 0.05);
+  /* Buttons */
+  --button-primary: #1f6f4b;
+  --button-primary-hover: #195c3e;
+  --button-success: #1f6f4b;
+  --button-success-hover: #195c3e;
+  --button-danger: #b4452f;
+  --button-danger-hover: #9a3826;
+  --button-secondary: #e8e1d2;
+  --button-secondary-hover: #ddd4c1;
+  --button-neutral: #5d5446;         /* warm taupe secondary action */
+  --button-neutral-hover: #4a4234;
+  --button-info: #5d5446;            /* alias kept for existing usages */
+  --button-info-hover: #4a4234;
 
-  /* Sidebar */
-  --sidebar-bg:            #ffffff;
-  --sidebar-border:        #e5e8ef;
-  --topic-hover:           #f1f3f8;
-  --topic-selected:        #eef0fc;
-  --topic-border-selected: #6f76e6;
+  /* Shadows — soft, low, paper-like */
+  --shadow-xs: 0 1px 2px 0 rgba(45, 36, 22, 0.05);
+  --shadow-sm: 0 1px 3px rgba(45, 36, 22, 0.07), 0 1px 2px rgba(45, 36, 22, 0.04);
+  --shadow-md: 0 4px 12px -2px rgba(45, 36, 22, 0.10), 0 2px 4px -2px rgba(45, 36, 22, 0.06);
+  --shadow-lg: 0 12px 28px -8px rgba(45, 36, 22, 0.16), 0 4px 8px -4px rgba(45, 36, 22, 0.08);
+  --shadow-xl: 0 24px 48px -12px rgba(45, 36, 22, 0.22);
+  --shadow-2xl: 0 32px 64px -16px rgba(30, 24, 14, 0.32);
 
-  /* Radii */
-  --radius-xs:   0.375rem; /* 6px */
-  --radius-sm:   0.5rem;   /* 8px */
-  --radius-md:   0.75rem;  /* 12px */
-  --radius-lg:   1rem;     /* 16px */
-  --radius-xl:   1.375rem; /* 22px */
+  /* Header */
+  --header-bg: rgba(255, 253, 248, 0.82);
+  --header-border: #e2dac9;
+  --header-shadow: 0 1px 0 rgba(123, 110, 88, 0.10);
+
+  /* Sidebar / list */
+  --sidebar-bg: #f8f4eb;
+  --sidebar-border: #e2dac9;
+  --topic-hover: #efe9dc;
+  --topic-selected: linear-gradient(90deg, rgba(31, 111, 75, 0.10), rgba(31, 111, 75, 0.02));
+  --topic-border-selected: #1f6f4b;
+
+  /* Radii — restrained, editorial */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1.1rem;
   --radius-full: 9999px;
 
-  /* Motion */
-  --transition-fast: 120ms cubic-bezier(0.22, 0.61, 0.36, 1);
-  --transition-base: 190ms cubic-bezier(0.22, 0.61, 0.36, 1);
-  --transition-slow: 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  --transition-fast: 140ms cubic-bezier(0.33, 1, 0.68, 1);
+  --transition-base: 220ms cubic-bezier(0.33, 1, 0.68, 1);
+  --transition-slow: 360ms cubic-bezier(0.33, 1, 0.68, 1);
 }
 
 [data-theme="dark"] {
-  --bg-primary:   #14161c;
-  --bg-secondary: #1c1f27;
-  --bg-tertiary:  #161922;
-  --bg-accent:    #232639;
-  --bg-card:      rgba(28, 31, 39, 0.95);
-  --bg-hover:     #232733;
-  --bg-active:    #2a2f3d;
-  --bg-overlay:   rgba(6, 8, 14, 0.62);
+  /* ============================================================
+     EDITORIAL — Dark (warm ink)
+     ============================================================ */
+  --bg-primary: #15120c;
+  --bg-secondary: #1f1b13;
+  --bg-tertiary: #2a251b;
+  --bg-accent: linear-gradient(180deg, #1c1810 0%, #161209 100%);
+  --bg-card: #1f1b13;
+  --bg-hover: #2a251b;
+  --bg-overlay: rgba(0, 0, 0, 0.62);
 
-  --text-primary:   #eceef4;
-  --text-secondary: #b6bccb;
-  --text-tertiary:  #878ea0;
-  --text-muted:     #646b7d;
+  --text-primary: #f3ecdd;
+  --text-secondary: #d9cfbc;
+  --text-tertiary: #aaa08c;
+  --text-muted: #7e7666;
 
-  --border-color:  #2a2f3b;
-  --border-strong: #383f4f;
-  --border-subtle: #21252f;
-  --border-light:  #21252f;
-  --border-focus:  #8088f0;
+  --border-color: #322c20;
+  --border-subtle: rgba(205, 190, 160, 0.12);
+  --border-light: #2a251b;
+  --border-focus: #51b07f;
 
-  --accent:        #8088f0;
-  --accent-hover:  #9097f2;
-  --accent-press:  #a3a9f5;
-  --accent-soft:   #232639;
-  --accent-soft-2: #2b2f48;
-  --accent-border: #3a3f60;
-  --accent-fg:     #aeb3f5;
-  --fg-on-accent:  #ffffff;
-  --ring:          rgba(128, 136, 240, 0.45);
+  --accent: #51b07f;
+  --accent-hover: #62bd8d;
+  --accent-strong: #7cc89d;
+  --accent-soft: rgba(81, 176, 127, 0.14);
+  --accent-border: rgba(81, 176, 127, 0.30);
 
-  --button-primary:         #8088f0;
-  --button-primary-hover:   #9097f2;
-  --button-success:         #66b985;
-  --button-success-hover:   #78c594;
-  --button-danger:          #e08a84;
-  --button-danger-hover:    #ec9f99;
-  --button-secondary:       #232733;
-  --button-secondary-hover: #2a2f3d;
-  --button-info:            #8088f0;
-  --button-info-hover:      #9097f2;
+  --clay: #d28a5d;
+  --clay-soft: rgba(210, 138, 93, 0.16);
+  --clay-border: rgba(210, 138, 93, 0.34);
 
-  --success:      #66b985;
-  --success-soft: #1c2a22;
-  --success-fg:   #8fcda6;
-  --warning:      #d8a157;
-  --warning-soft: #2c2415;
-  --warning-fg:   #e3b878;
-  --danger:       #e08a84;
-  --danger-soft:  #2c1b1a;
-  --danger-fg:    #ec9f99;
-  --pin:          #e0b25a;
-  --pin-soft:     #2c2415;
+  --highlight: #e0b24a;
+  --highlight-soft: rgba(224, 178, 74, 0.16);
 
-  --shadow-xs:  0 1px 1px rgba(0, 0, 0, 0.30);
-  --shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.40), 0 1px 1px rgba(0, 0, 0, 0.30);
-  --shadow-md:  0 4px 14px -3px rgba(0, 0, 0, 0.50), 0 2px 4px -2px rgba(0, 0, 0, 0.40);
-  --shadow-lg:  0 16px 34px -8px rgba(0, 0, 0, 0.60), 0 4px 10px -4px rgba(0, 0, 0, 0.45);
-  --shadow-xl:  0 20px 40px -10px rgba(0, 0, 0, 0.65);
-  --shadow-2xl: 0 30px 60px -15px rgba(0, 0, 0, 0.70);
+  --button-primary: #2f9460;
+  --button-primary-hover: #36a56c;
+  --button-success: #2f9460;
+  --button-success-hover: #36a56c;
+  --button-danger: #d2674c;
+  --button-danger-hover: #de7559;
+  --button-secondary: #2a251b;
+  --button-secondary-hover: #352f22;
+  --button-neutral: #6e6557;
+  --button-neutral-hover: #7f7566;
+  --button-info: #6e6557;
+  --button-info-hover: #7f7566;
 
-  --header-gradient: #1c1f27;
-  --header-border:   #2a2f3b;
-  --header-shadow:   0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.55), 0 2px 4px -2px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 28px -8px rgba(0, 0, 0, 0.65), 0 4px 8px -4px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 24px 48px -12px rgba(0, 0, 0, 0.7);
+  --shadow-2xl: 0 32px 64px -16px rgba(0, 0, 0, 0.8);
 
-  --sidebar-bg:            #1c1f27;
-  --sidebar-border:        #2a2f3b;
-  --topic-hover:           #232733;
-  --topic-selected:        #232639;
-  --topic-border-selected: #8088f0;
+  --header-bg: rgba(31, 27, 19, 0.82);
+  --header-border: #322c20;
+  --header-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+
+  --sidebar-bg: #1a160f;
+  --sidebar-border: #322c20;
+  --topic-hover: #2a251b;
+  --topic-selected: linear-gradient(90deg, rgba(81, 176, 127, 0.16), rgba(81, 176, 127, 0.04));
+  --topic-border-selected: #51b07f;
 }
 
-/* Base */
-*, *::before, *::after { box-sizing: border-box; }
-
-body {
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* ---- Base ---- */
+html {
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
   text-rendering: optimizeLegibility;
 }
 
-/* Scrollbars */
-::-webkit-scrollbar { width: 8px; height: 8px; }
+body {
+  font-family: var(--font-ui);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Smooth, but only on the properties that matter (not a global *) */
+body,
+aside,
+header,
+main,
+section,
+.theme-transition {
+  transition: background-color var(--transition-base), color var(--transition-base), border-color var(--transition-base);
+}
+
+/* Buttons: calm, deliberate motion (no global bounce) */
+button {
+  font-family: var(--font-ui);
+  transition: background-color var(--transition-fast), color var(--transition-fast),
+              border-color var(--transition-fast), box-shadow var(--transition-fast),
+              transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+input, textarea, select {
+  font-family: var(--font-ui);
+}
+
+/* Scrollbar — thin and warm */
+::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: var(--radius-full);
-  border: 2px solid transparent;
+  border: 3px solid transparent;
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); background-clip: padding-box; }
 
-/* Focus ring */
-a:focus-visible,
-button:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
-select:focus-visible,
-[role="button"]:focus-visible {
+/* Focus */
+*:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px var(--ring);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
 }
-
-a:focus:not(:focus-visible),
-button:focus:not(:focus-visible),
-input:focus:not(:focus-visible),
-textarea:focus:not(:focus-visible),
-select:focus:not(:focus-visible),
-[role="button"]:focus:not(:focus-visible) {
-  outline: none;
-  box-shadow: none;
-}
-
-/* Transitions for theme switching */
-*, *::before, *::after {
-  transition-property: background-color, border-color, color, box-shadow;
-  transition-duration: var(--transition-base);
-  transition-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
-}
-
-/* Suppress transition on elements that have their own animation */
-button, a, input, select, textarea {
-  transition-duration: var(--transition-fast);
-}
-
-/* Buttons — remove the jump-up hover effect (was feeling dated) */
-button:hover:not(:disabled) { transform: none; }
-button:active:not(:disabled) { transform: translateY(0.5px) scale(0.99); }
 
 /* Card hover */
-.card-hover { transition: all var(--transition-base); }
-.card-hover:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.card-hover { transition: transform var(--transition-base), box-shadow var(--transition-base); }
+.card-hover:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 
 /* Animations */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(8px) scale(0.98); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 @keyframes slideDown {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.7; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   PROSE — the reading experience
+   Theme-aware, serif-bodied, generous measure. All note content
+   rendered by markdown.js inherits from here (no inline colors).
+   ============================================================ */
+.prose {
+  font-family: var(--font-serif);
+  font-size: 1.075rem;
+  line-height: 1.78;
+  color: var(--text-secondary);
+  max-width: 70ch;
+  font-weight: 400;
+  letter-spacing: 0.003em;
+}
+
+.prose > :first-child { margin-top: 0; }
+.prose > :last-child { margin-bottom: 0; }
+
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  font-family: var(--font-display);
+  color: var(--text-primary);
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  line-height: 1.2;
+}
+.prose h1 {
+  font-size: 2.1rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
+  letter-spacing: -0.02em;
+}
+.prose h2 {
+  font-size: 1.6rem;
+  margin: 2.2rem 0 0.9rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border-color);
+}
+.prose h3 { font-size: 1.3rem; margin: 1.8rem 0 0.6rem; }
+.prose h4 { font-size: 1.1rem; margin: 1.4rem 0 0.5rem; font-weight: 700; }
+.prose h5 { font-size: 0.95rem; margin: 1.2rem 0 0.4rem; font-weight: 700; font-family: var(--font-ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); }
+.prose h6 { font-size: 0.85rem; margin: 1rem 0 0.4rem; font-weight: 700; font-family: var(--font-ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+
+.prose p { margin: 0 0 1.15rem; color: var(--text-secondary); }
+.prose strong { font-weight: 600; color: var(--text-primary); }
+.prose em { font-style: italic; }
+
+.prose a {
+  color: var(--accent-strong);
+  text-decoration: none;
+  background-image: linear-gradient(var(--accent-border), var(--accent-border));
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
+  padding-bottom: 1px;
+  cursor: pointer;
+  transition: background-size var(--transition-fast), color var(--transition-fast);
+}
+.prose a:hover { color: var(--accent); background-size: 100% 2px; }
+
+.prose ul, .prose ol { margin: 0 0 1.15rem; padding-left: 1.5rem; }
+.prose li { margin-bottom: 0.4rem; color: var(--text-secondary); }
+.prose li::marker { color: var(--text-muted); }
+
+.prose blockquote {
+  margin: 1.5rem 0;
+  padding: 0.4rem 0 0.4rem 1.25rem;
+  border-left: 3px solid var(--accent);
+  color: var(--text-tertiary);
+  font-style: italic;
+  font-size: 1.1rem;
+}
+.prose blockquote p { color: inherit; }
+
+.prose code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--bg-tertiary);
+  color: var(--accent-strong);
+  padding: 0.12rem 0.4rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+}
+.prose pre {
+  background: #161310;
+  color: #ece5d7;
+  padding: 1.1rem 1.25rem;
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  line-height: 1.6;
+}
+.prose pre code {
+  background: none;
+  border: none;
+  color: inherit;
+  padding: 0;
+  font-size: 0.9rem;
+}
+
+/* Images: responsive, aspect-preserving, centered, and capped so a tall or
+   huge image never overwhelms the reading column. */
+.prose img {
+  display: block;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  max-height: 70vh;            /* cap very tall images */
+  object-fit: contain;
+  margin: 1.5rem auto;          /* center within the measure */
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  background: var(--bg-tertiary);
+}
+
+/* A paragraph that only holds an image shouldn't add extra rhythm. */
+.prose p > img:only-child { margin-block: 1.5rem; }
+
+.prose hr {
+  border: none;
+  height: 1px;
+  background: var(--border-color);
+  margin: 2.25rem 0;
+}
+
+.prose table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.5rem 0;
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.prose th, .prose td {
+  border: 1px solid var(--border-color);
+  padding: 0.6rem 0.85rem;
+  text-align: left;
+}
+.prose th {
+  background: var(--bg-tertiary);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.prose td { color: var(--text-secondary); }
+.prose tbody tr:nth-child(even) td { background: rgba(123, 110, 88, 0.04); }
+
+/* Internal note links rendered by markdown.js */
+.prose .note-link {
+  font-family: var(--font-ui);
+  font-size: 0.9em;
+  font-weight: 500;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  padding: 0.05rem 0.45rem;
+  border-radius: var(--radius-full);
+  text-decoration: none;
+  background-image: none;
+  white-space: nowrap;
+}
+.prose .note-link:hover { background: var(--accent-border); color: var(--accent-strong); }
+
+.prose .note-empty {
+  font-family: var(--font-ui);
+  color: var(--text-muted);
+  font-style: italic;
 }

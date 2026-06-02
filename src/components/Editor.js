@@ -1,6 +1,7 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef } from 'react';
 import { ImageIcon, LinkIcon, PaletteIcon, UploadImageIcon } from './icons';
 import Preview from './Preview';
+import LinkPreview from './LinkPreview';
 
 export default function Editor({
   editContent,
@@ -21,12 +22,6 @@ export default function Editor({
   setPreviewUrl
 }) {
   const uploadInputRef = useRef(null);
-  const [iframeError, setIframeError] = useState(false);
-
-  // Reset iframe error when previewUrl changes
-  useEffect(() => {
-    setIframeError(false);
-  }, [previewUrl]);
 
   const insertTextAtCursor = (textToInsert) => {
     const textarea = editTextareaRef?.current;
@@ -373,7 +368,7 @@ export default function Editor({
           }}
           onFocus={(e) => {
             e.currentTarget.style.borderColor = 'var(--border-focus)';
-            e.currentTarget.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.05), 0 0 0 3px rgba(139,92,246,0.1)';
+            e.currentTarget.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.05), 0 0 0 3px var(--accent-soft)';
           }}
           onBlur={(e) => {
             e.currentTarget.style.borderColor = 'var(--border-color)';
@@ -400,157 +395,25 @@ export default function Editor({
           flexDirection: 'column',
           minHeight: previewUrl ? 'auto' : '100%'
         }}>
-          <h3 style={{ 
-            fontWeight: '700', 
-            marginBottom: '1.25rem', 
-            color: 'var(--text-primary)',
-            fontSize: '1.125rem',
+          <h3 style={{
+            fontFamily: 'var(--font-ui)',
+            fontWeight: '700',
+            marginBottom: '1.25rem',
+            color: 'var(--text-tertiary)',
+            fontSize: '0.72rem',
+            textTransform: 'uppercase',
+            letterSpacing: '0.12em',
             paddingBottom: '0.75rem',
-            borderBottom: '2px solid var(--border-light)'
+            borderBottom: '1px solid var(--border-color)'
           }}>Preview</h3>
           <div style={{ flex: 1, overflow: 'auto' }}>
-            <Preview html={previewHtml} onContentClick={handleContentClick} />
+            <Preview className="prose" html={previewHtml} onContentClick={handleContentClick} />
           </div>
         </div>
         
         {hasPreview && (
-          <div style={{ 
-            flex: '1 1 400px',
-            minHeight: '300px',
-            backgroundColor: 'var(--bg-secondary)', 
-            padding: '1.5rem', 
-            borderRadius: 'var(--radius-lg)', 
-            border: '1px solid var(--border-color)',
-            boxShadow: 'var(--shadow-sm)',
-            display: 'flex',
-            flexDirection: 'column'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '1rem'
-            }}>
-              <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: 'var(--text-primary)' }}>Link Preview</h3>
-              <button
-                onClick={() => setPreviewUrl('')}
-                style={{
-                  backgroundColor: 'transparent',
-                  color: 'var(--text-muted)',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '1.5rem',
-                  padding: '0.25rem',
-                  lineHeight: 1,
-                  transition: 'color var(--transition-fast)'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
-                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
-              >
-                ×
-              </button>
-            </div>
-            <iframe
-              src={previewUrl}
-              title="Link preview"
-              sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-              style={{
-                width: '100%',
-                flex: 1,
-                minHeight: '300px',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                backgroundColor: 'white',
-                display: iframeError ? 'none' : 'block'
-              }}
-              onError={() => setIframeError(true)}
-              onLoad={(e) => {
-                // Check if iframe loaded but is blocked by CSP
-                try {
-                  // Try to access iframe content - will throw if blocked
-                  const iframeDoc = e.target.contentDocument || e.target.contentWindow?.document;
-                  if (!iframeDoc || !iframeDoc.body) {
-                    setIframeError(true);
-                  } else {
-                    setIframeError(false);
-                  }
-                } catch (err) {
-                  // Cross-origin or CSP error - show fallback
-                  setIframeError(true);
-                }
-              }}
-            />
-            {iframeError && (
-              <div style={{
-                flex: 1,
-                minHeight: '300px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '2rem',
-                textAlign: 'center',
-                backgroundColor: 'var(--bg-tertiary)',
-                borderRadius: 'var(--radius-md)',
-                border: '2px dashed var(--border-color)'
-              }}>
-                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔗</div>
-                <h4 style={{ fontSize: '1.125rem', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
-                  Cannot Preview This Link
-                </h4>
-                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', maxWidth: '300px' }}>
-                  This website blocks embedding in frames for security reasons.
-                </p>
-                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-                  <button
-                    onClick={() => window.open(previewUrl, '_blank', 'noopener,noreferrer')}
-                    style={{
-                      background: 'var(--button-primary)',
-                      color: 'white',
-                      padding: '0.625rem 1.25rem',
-                      borderRadius: 'var(--radius-md)',
-                      fontSize: '0.875rem',
-                      fontWeight: '600',
-                      border: 'none',
-                      cursor: 'pointer',
-                      boxShadow: 'var(--shadow-sm)',
-                      transition: 'all var(--transition-fast)'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'var(--button-primary-hover)';
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                      e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'var(--button-primary)';
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
-                    }}
-                  >
-                    Open in New Tab
-                  </button>
-                  <button
-                    onClick={() => {
-                      setPreviewUrl('');
-                      setIframeError(false);
-                    }}
-                    style={{
-                      background: 'var(--button-secondary)',
-                      color: 'var(--text-secondary)',
-                      padding: '0.625rem 1.25rem',
-                      borderRadius: 'var(--radius-md)',
-                      fontSize: '0.875rem',
-                      fontWeight: '600',
-                      border: 'none',
-                      cursor: 'pointer',
-                      transition: 'all var(--transition-fast)'
-                    }}
-                  >
-                    Close Preview
-                  </button>
-                </div>
-              </div>
-            )}
+          <div style={{ flex: '1 1 400px', minHeight: '320px', display: 'flex' }}>
+            <LinkPreview url={previewUrl} onClose={() => setPreviewUrl('')} />
           </div>
         )}
       </div>

@@ -3,21 +3,7 @@
     "users": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid",
-        "topics": {
-          ".read": "auth != null && auth.uid === $uid",
-          ".write": "auth != null && auth.uid === $uid"
-        }
-      }
-    },
-    "devices": {
-      "$deviceId": {
-        ".read": "auth == null",
-        ".write": "auth == null",
-        "topics": {
-          ".read": "auth == null",
-          ".write": "auth == null"
-        }
+        ".write": "auth != null && auth.uid === $uid"
       }
     },
     "$other": {

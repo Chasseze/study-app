@@ -53,7 +53,6 @@ export default function Sidebar({
 }) {
   const [draggedPresetId, setDraggedPresetId] = useState(null);
   const [openOverflowId, setOpenOverflowId] = useState(null);
-
   // Sort topics: pinned first, then by lastModified
   const sortedTopics = [...filteredTopics].sort((a, b) => {
     if (a.pinned && !b.pinned) return -1;
@@ -65,22 +64,18 @@ export default function Sidebar({
     <aside
       aria-label="Topic navigation"
       style={{
-        width: '280px',
-        minWidth: '280px',
-        maxWidth: '280px',
+        width: '256px',
+        minWidth: '256px',
+        maxWidth: '256px',
         backgroundColor: 'var(--sidebar-bg)',
         borderRight: '1px solid var(--sidebar-border)',
         display: 'flex',
         flexDirection: 'column',
+        boxShadow: 'var(--shadow-sm)',
         overflow: 'hidden'
       }}
     >
-      {/* New Topic Button */}
-      <div style={{
-        padding: '0.875rem 1rem',
-        borderBottom: '1px solid var(--border-subtle)',
-        backgroundColor: 'var(--bg-secondary)'
-      }}>
+      <div style={{ padding: '0.55rem 0.7rem', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
         <button
           data-testid="btn-new-topic"
           id="new-topic-button"
@@ -90,46 +85,40 @@ export default function Sidebar({
           aria-expanded={showNewTopicModal ? 'true' : 'false'}
           style={{
             width: '100%',
-            background: 'var(--accent)',
-            color: 'var(--fg-on-accent)',
-            padding: '0.625rem 1rem',
+            background: 'var(--button-primary)',
+            color: 'white',
+            padding: '0.6rem 0.875rem',
             borderRadius: 'var(--radius-md)',
-            fontWeight: 600,
-            fontSize: '0.875rem',
+            fontWeight: '600',
+            fontSize: '0.85rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: '0.5rem',
             border: 'none',
             cursor: 'pointer',
-            boxShadow: 'var(--shadow-xs)',
-            transition: 'background var(--transition-fast)',
-            fontFamily: 'inherit'
+            boxShadow: 'var(--shadow-sm)',
+            transition: 'all var(--transition-fast)'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'var(--accent-hover)';
+            e.currentTarget.style.background = 'var(--button-primary-hover)';
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = 'var(--shadow-md)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'var(--accent)';
+            e.currentTarget.style.background = 'var(--button-primary)';
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
           }}
         >
           <PlusIcon /> New Topic
         </button>
       </div>
 
-      {/* Search */}
-      <div style={{
-        padding: '0.75rem 1rem',
-        borderBottom: '1px solid var(--border-subtle)',
-        backgroundColor: 'var(--bg-secondary)'
-      }}>
+      <div style={{ padding: '0.55rem 0.7rem', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-tertiary)', overflow: 'hidden' }}>
         <div style={{ position: 'relative', width: '100%' }}>
           <label htmlFor="topic-search" style={{ position: 'absolute', left: -9999 }}>{'Search topics'}</label>
-          <span style={{
-            position: 'absolute', left: '0.7rem', top: '50%',
-            transform: 'translateY(-50%)',
-            color: 'var(--text-muted)', zIndex: 1, pointerEvents: 'none'
-          }} aria-hidden="true">
+          <span style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', zIndex: 1, pointerEvents: 'none' }} aria-hidden="true">
             <SearchIcon />
           </span>
           <input
@@ -149,43 +138,39 @@ export default function Sidebar({
               border: '1px solid var(--border-color)',
               borderRadius: 'var(--radius-md)',
               fontSize: '0.875rem',
-              backgroundColor: 'var(--bg-tertiary)',
+              backgroundColor: 'var(--bg-secondary)',
               color: 'var(--text-primary)',
-              transition: 'border-color var(--transition-fast), box-shadow var(--transition-fast)',
+              transition: 'all var(--transition-fast)',
+              boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)',
               boxSizing: 'border-box',
-              outline: 'none',
-              fontFamily: 'inherit'
+              outline: 'none'
             }}
             onFocus={(e) => {
               e.currentTarget.style.borderColor = 'var(--border-focus)';
-              e.currentTarget.style.boxShadow = '0 0 0 3px var(--ring)';
+              e.currentTarget.style.boxShadow = '0 0 0 2px var(--accent-soft), inset 0 1px 2px rgba(0,0,0,0.05)';
             }}
             onBlur={(e) => {
               e.currentTarget.style.borderColor = 'var(--border-color)';
-              e.currentTarget.style.boxShadow = 'none';
+              e.currentTarget.style.boxShadow = 'inset 0 1px 2px rgba(0,0,0,0.05)';
             }}
           />
           <span id={searchHelpId} style={{ position: 'absolute', left: -9999 }}>{'Search topics by title or note content. Results update immediately.'}</span>
           <span id={topicCountLabelId} aria-live="polite" style={{ position: 'absolute', left: -9999 }}>{topicCountAnnouncement}</span>
         </div>
+
       </div>
 
-      {/* Category Filter */}
-      <div style={{
-        padding: '0.75rem 1rem',
-        borderBottom: '1px solid var(--border-subtle)',
-        backgroundColor: 'var(--bg-secondary)'
-      }}>
+      <div style={{ padding: '0.55rem 0.7rem', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
         <label
           id={categoryFilterLabelId}
           htmlFor={categoryFilterSelectId}
           style={{
             display: 'block',
-            fontSize: '0.6875rem',
+            fontSize: '0.75rem',
             fontWeight: 600,
-            color: 'var(--text-muted)',
+            color: 'var(--text-tertiary)',
             textTransform: 'uppercase',
-            letterSpacing: '0.06em',
+            letterSpacing: '0.08em',
             marginBottom: '0.35rem'
           }}
         >
@@ -200,24 +185,13 @@ export default function Sidebar({
           onChange={(e) => setSelectedCategory(e.target.value)}
           style={{
             width: '100%',
-            padding: '0.5rem 0.75rem',
+            padding: '0.55rem 0.75rem',
             border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
+            borderRadius: '0.375rem',
             fontSize: '0.875rem',
-            backgroundColor: 'var(--bg-tertiary)',
+            backgroundColor: 'var(--bg-secondary)',
             color: 'var(--text-primary)',
-            outline: 'none',
-            fontFamily: 'inherit',
-            cursor: 'pointer',
-            transition: 'border-color var(--transition-fast), box-shadow var(--transition-fast)'
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = 'var(--border-focus)';
-            e.currentTarget.style.boxShadow = '0 0 0 3px var(--ring)';
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = 'var(--border-color)';
-            e.currentTarget.style.boxShadow = 'none';
+            boxShadow: 'inset 0 1px 2px rgba(15,23,42,0.06)'
           }}
         >
           {categories.map(cat => (
@@ -228,23 +202,17 @@ export default function Sidebar({
         </select>
       </div>
 
-      {/* Tag filter chips */}
-      {allTags && allTags.length > 0 && (
-        <div style={{
-          padding: '0.6rem 1rem',
-          borderBottom: '1px solid var(--border-subtle)',
-          backgroundColor: 'var(--bg-secondary)'
-        }}>
-          <p style={{
-            margin: '0 0 0.4rem',
-            fontSize: '0.6875rem',
-            fontWeight: 600,
-            color: 'var(--text-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em'
-          }}>Filter by tag</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-            {allTags.map(tag => (
+      {/* Tag filter chips — always shown for discoverability */}
+      {(
+        <div style={{ padding: '0.5rem 0.7rem', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+          <p style={{ margin: '0 0 0.35rem', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Filter by tag</p>
+          {(!allTags || allTags.length === 0) && (
+            <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              No tags yet. Add tags while editing a note.
+            </p>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+            {(allTags || []).map(tag => (
               <div key={tag} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                 <button
                   data-testid={`tag-filter-${tag}`}
@@ -252,22 +220,15 @@ export default function Sidebar({
                   style={{
                     flex: 1,
                     textAlign: 'left',
-                    fontSize: '0.75rem',
+                    fontSize: '0.72rem',
                     fontWeight: 600,
-                    padding: '0.2rem 0.6rem',
-                    borderRadius: 'var(--radius-full)',
-                    border: selectedTagFilter === tag
-                      ? '1px solid var(--accent-border)'
-                      : '1px solid var(--border-color)',
-                    backgroundColor: selectedTagFilter === tag
-                      ? 'var(--accent-soft)'
-                      : 'var(--bg-tertiary)',
-                    color: selectedTagFilter === tag
-                      ? 'var(--accent-fg)'
-                      : 'var(--text-secondary)',
+                    padding: '0.2rem 0.5rem',
+                    borderRadius: '999px',
+                    border: selectedTagFilter === tag ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+                    backgroundColor: selectedTagFilter === tag ? 'var(--accent)' : 'var(--bg-secondary)',
+                    color: selectedTagFilter === tag ? '#fffdf8' : 'var(--text-secondary)',
                     cursor: 'pointer',
-                    transition: 'all var(--transition-fast)',
-                    fontFamily: 'inherit'
+                    transition: 'all 0.15s'
                   }}
                 >
                   #{tag}
@@ -280,12 +241,11 @@ export default function Sidebar({
                     border: '1px solid var(--border-color)',
                     backgroundColor: 'var(--bg-tertiary)',
                     color: 'var(--text-secondary)',
-                    borderRadius: 'var(--radius-xs)',
+                    borderRadius: '0.35rem',
                     fontSize: '0.68rem',
-                    fontWeight: 600,
-                    padding: '0.18rem 0.4rem',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit'
+                    fontWeight: 700,
+                    padding: '0.18rem 0.35rem',
+                    cursor: 'pointer'
                   }}
                 >
                   Rename
@@ -295,15 +255,14 @@ export default function Sidebar({
                   data-testid={`tag-delete-${tag}`}
                   onClick={() => onDeleteTagGlobally(tag)}
                   style={{
-                    border: '1px solid var(--danger-soft)',
-                    backgroundColor: 'var(--danger-soft)',
-                    color: 'var(--danger-fg)',
-                    borderRadius: 'var(--radius-xs)',
+                    border: '1px solid #fecaca',
+                    backgroundColor: 'transparent',
+                    color: 'var(--button-danger)',
+                    borderRadius: '0.35rem',
                     fontSize: '0.68rem',
-                    fontWeight: 600,
-                    padding: '0.18rem 0.4rem',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit'
+                    fontWeight: 700,
+                    padding: '0.18rem 0.35rem',
+                    cursor: 'pointer'
                   }}
                 >
                   Delete
@@ -317,9 +276,9 @@ export default function Sidebar({
       {/* Archive toggle */}
       {archivedCount > 0 && (
         <div style={{
-          padding: '0.4rem 1rem',
-          borderBottom: '1px solid var(--border-subtle)',
-          backgroundColor: 'var(--bg-secondary)',
+          padding: '0.4rem 0.7rem',
+          borderBottom: '1px solid var(--border-color)',
+          backgroundColor: 'var(--bg-tertiary)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between'
@@ -332,12 +291,10 @@ export default function Sidebar({
               gap: '0.5rem',
               background: 'none',
               border: 'none',
-              color: showArchived ? 'var(--warning)' : 'var(--text-muted)',
+              color: showArchived ? 'var(--highlight)' : 'var(--text-muted)',
               cursor: 'pointer',
               fontSize: '0.8rem',
-              fontWeight: 500,
-              fontFamily: 'inherit',
-              padding: '0.25rem 0'
+              fontWeight: 500
             }}
           >
             <ArchiveIcon />
@@ -347,20 +304,9 @@ export default function Sidebar({
       )}
 
       {/* Saved filter presets */}
-      <div style={{
-        padding: '0.6rem 1rem',
-        borderBottom: '1px solid var(--border-subtle)',
-        backgroundColor: 'var(--bg-secondary)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
-          <p style={{
-            margin: 0,
-            fontSize: '0.6875rem',
-            fontWeight: 600,
-            color: 'var(--text-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em'
-          }}>Saved views</p>
+      <div style={{ padding: '0.5rem 0.7rem', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+          <p style={{ margin: 0, fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Saved views</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
             <button
               type="button"
@@ -369,14 +315,13 @@ export default function Sidebar({
               aria-label={`Switch saved views to ${savedViewsDensity === 'compact' ? 'expanded' : 'compact'} mode`}
               style={{
                 fontSize: '0.68rem',
-                fontWeight: 600,
+                fontWeight: 700,
                 border: '1px solid var(--border-color)',
                 color: 'var(--text-secondary)',
                 backgroundColor: 'var(--bg-tertiary)',
-                borderRadius: 'var(--radius-full)',
-                padding: '0.15rem 0.45rem',
-                cursor: 'pointer',
-                fontFamily: 'inherit'
+                borderRadius: '999px',
+                padding: '0.16rem 0.45rem',
+                cursor: 'pointer'
               }}
             >
               {savedViewsDensity === 'compact' ? 'Compact' : 'Expanded'}
@@ -388,14 +333,13 @@ export default function Sidebar({
               disabled={!hasActiveFilter}
               style={{
                 fontSize: '0.68rem',
-                fontWeight: 600,
-                border: '1px solid var(--accent-border)',
-                color: hasActiveFilter ? 'var(--accent-fg)' : 'var(--text-muted)',
+                fontWeight: 700,
+                border: hasActiveFilter ? '1px solid var(--accent-border)' : '1px solid var(--border-color)',
+                color: hasActiveFilter ? 'var(--accent-strong)' : 'var(--text-muted)',
                 backgroundColor: hasActiveFilter ? 'var(--accent-soft)' : 'var(--bg-tertiary)',
-                borderRadius: 'var(--radius-full)',
-                padding: '0.15rem 0.45rem',
-                cursor: hasActiveFilter ? 'pointer' : 'not-allowed',
-                fontFamily: 'inherit'
+                borderRadius: '999px',
+                padding: '0.16rem 0.45rem',
+                cursor: hasActiveFilter ? 'pointer' : 'not-allowed'
               }}
             >
               Save current
@@ -404,7 +348,7 @@ export default function Sidebar({
         </div>
 
         {savedFilters && savedFilters.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
             {savedFilters.map((preset) => (
               <div
                 key={preset.id}
@@ -423,10 +367,10 @@ export default function Sidebar({
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.25rem',
-                  opacity: draggedPresetId === preset.id ? 0.55 : 1,
-                  border: draggedPresetId === preset.id ? '1px dashed var(--border-strong)' : '1px solid transparent',
-                  borderRadius: 'var(--radius-sm)',
+                  gap: '0.3rem',
+                  opacity: draggedPresetId === preset.id ? 0.65 : 1,
+                  border: draggedPresetId === preset.id ? '1px dashed #94a3b8' : '1px solid transparent',
+                  borderRadius: '0.45rem',
                   padding: '0.1rem'
                 }}
               >
@@ -437,18 +381,17 @@ export default function Sidebar({
                   style={{
                     flex: 1,
                     textAlign: 'left',
-                    border: preset.pinned ? '1px solid var(--pin)' : '1px solid var(--border-color)',
-                    backgroundColor: preset.pinned ? 'var(--pin-soft)' : 'var(--bg-secondary)',
-                    color: preset.pinned ? 'var(--pin)' : 'var(--text-primary)',
-                    borderRadius: 'var(--radius-sm)',
-                    fontSize: '0.75rem',
+                    border: preset.pinned ? '1px solid #f59e0b' : '1px solid var(--border-color)',
+                    backgroundColor: preset.pinned ? 'var(--highlight-soft)' : 'var(--bg-secondary)',
+                    color: preset.pinned ? 'var(--text-secondary)' : 'var(--text-primary)',
+                    borderRadius: '0.4rem',
+                    fontSize: '0.72rem',
                     fontWeight: 600,
-                    padding: '0.3rem 0.5rem',
+                    padding: '0.3rem 0.45rem',
                     cursor: 'pointer',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    fontFamily: 'inherit'
+                    whiteSpace: 'nowrap'
                   }}
                 >
                   {preset.pinned ? `★ ${preset.label}` : preset.label}
@@ -466,13 +409,12 @@ export default function Sidebar({
                         border: '1px solid var(--border-color)',
                         backgroundColor: 'var(--bg-tertiary)',
                         color: 'var(--text-secondary)',
-                        borderRadius: 'var(--radius-xs)',
+                        borderRadius: '0.35rem',
                         fontSize: '0.82rem',
                         fontWeight: 700,
                         padding: '0.18rem 0.4rem',
                         cursor: 'pointer',
-                        lineHeight: 1,
-                        fontFamily: 'inherit'
+                        lineHeight: 1
                       }}
                     >
                       ⋮
@@ -488,8 +430,8 @@ export default function Sidebar({
                           zIndex: 100,
                           backgroundColor: 'var(--bg-secondary)',
                           border: '1px solid var(--border-color)',
-                          borderRadius: 'var(--radius-md)',
-                          boxShadow: 'var(--shadow-lg)',
+                          borderRadius: '0.4rem',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
                           minWidth: '140px',
                           display: 'flex',
                           flexDirection: 'column',
@@ -501,7 +443,7 @@ export default function Sidebar({
                           role="menuitem"
                           data-testid={`overflow-pin-${preset.id}`}
                           onClick={() => { onTogglePinSavedFilter(preset.id); setOpenOverflowId(null); }}
-                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', borderRadius: 'var(--radius-xs)', color: 'var(--text-secondary)', fontFamily: 'inherit' }}
+                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', borderRadius: '0.3rem' }}
                         >
                           {preset.pinned ? '☆ Unpin' : '★ Pin'}
                         </button>
@@ -510,7 +452,7 @@ export default function Sidebar({
                           role="menuitem"
                           data-testid={`overflow-move-top-${preset.id}`}
                           onClick={() => { onMoveSavedFilterToEdge(preset.id, 'top'); setOpenOverflowId(null); }}
-                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', borderRadius: 'var(--radius-xs)', color: 'var(--text-secondary)', fontFamily: 'inherit' }}
+                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', borderRadius: '0.3rem' }}
                         >
                           ⤒ Move to top
                         </button>
@@ -519,7 +461,7 @@ export default function Sidebar({
                           role="menuitem"
                           data-testid={`overflow-move-up-${preset.id}`}
                           onClick={() => { onMoveSavedFilter(preset.id, 'up'); setOpenOverflowId(null); }}
-                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', borderRadius: 'var(--radius-xs)', color: 'var(--text-secondary)', fontFamily: 'inherit' }}
+                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', borderRadius: '0.3rem' }}
                         >
                           ↑ Move up
                         </button>
@@ -528,7 +470,7 @@ export default function Sidebar({
                           role="menuitem"
                           data-testid={`overflow-move-down-${preset.id}`}
                           onClick={() => { onMoveSavedFilter(preset.id, 'down'); setOpenOverflowId(null); }}
-                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', borderRadius: 'var(--radius-xs)', color: 'var(--text-secondary)', fontFamily: 'inherit' }}
+                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', borderRadius: '0.3rem' }}
                         >
                           ↓ Move down
                         </button>
@@ -537,7 +479,7 @@ export default function Sidebar({
                           role="menuitem"
                           data-testid={`overflow-move-bottom-${preset.id}`}
                           onClick={() => { onMoveSavedFilterToEdge(preset.id, 'bottom'); setOpenOverflowId(null); }}
-                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', borderRadius: 'var(--radius-xs)', color: 'var(--text-secondary)', fontFamily: 'inherit' }}
+                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', borderRadius: '0.3rem' }}
                         >
                           ⤓ Move to bottom
                         </button>
@@ -546,7 +488,7 @@ export default function Sidebar({
                           role="menuitem"
                           data-testid={`overflow-rename-${preset.id}`}
                           onClick={() => { onRenameSavedFilter(preset.id); setOpenOverflowId(null); }}
-                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', borderRadius: 'var(--radius-xs)', color: 'var(--text-secondary)', fontFamily: 'inherit' }}
+                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', borderRadius: '0.3rem' }}
                         >
                           ✏ Rename
                         </button>
@@ -555,7 +497,7 @@ export default function Sidebar({
                           role="menuitem"
                           data-testid={`overflow-delete-${preset.id}`}
                           onClick={() => { onDeleteSavedFilter(preset.id); setOpenOverflowId(null); }}
-                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', color: 'var(--danger-fg)', borderRadius: 'var(--radius-xs)', fontFamily: 'inherit' }}
+                          style={{ textAlign: 'left', background: 'none', border: 'none', padding: '0.3rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', color: 'var(--button-danger)', borderRadius: '0.3rem' }}
                         >
                           ✕ Delete
                         </button>
@@ -571,15 +513,14 @@ export default function Sidebar({
                       aria-label={preset.pinned ? `Unpin saved view ${preset.label}` : `Pin saved view ${preset.label}`}
                       onClick={() => onTogglePinSavedFilter(preset.id)}
                       style={{
-                        border: '1px solid var(--pin)',
-                        backgroundColor: preset.pinned ? 'var(--pin-soft)' : 'var(--bg-tertiary)',
-                        color: preset.pinned ? 'var(--pin)' : 'var(--text-muted)',
-                        borderRadius: 'var(--radius-xs)',
+                        border: '1px solid #fcd34d',
+                        backgroundColor: preset.pinned ? 'var(--highlight)' : 'var(--highlight-soft)',
+                        color: preset.pinned ? '#fff' : 'var(--text-secondary)',
+                        borderRadius: '0.35rem',
                         fontSize: '0.7rem',
-                        fontWeight: 600,
+                        fontWeight: 700,
                         padding: '0.22rem 0.4rem',
-                        cursor: 'pointer',
-                        fontFamily: 'inherit'
+                        cursor: 'pointer'
                       }}
                     >
                       {preset.pinned ? 'Unpin' : 'Pin'}
@@ -593,12 +534,11 @@ export default function Sidebar({
                         border: '1px solid var(--border-color)',
                         backgroundColor: 'var(--bg-tertiary)',
                         color: 'var(--text-secondary)',
-                        borderRadius: 'var(--radius-xs)',
+                        borderRadius: '0.35rem',
                         fontSize: '0.7rem',
                         fontWeight: 700,
                         padding: '0.22rem 0.36rem',
-                        cursor: 'pointer',
-                        fontFamily: 'inherit'
+                        cursor: 'pointer'
                       }}
                     >
                       ⤒
@@ -612,12 +552,11 @@ export default function Sidebar({
                         border: '1px solid var(--border-color)',
                         backgroundColor: 'var(--bg-tertiary)',
                         color: 'var(--text-secondary)',
-                        borderRadius: 'var(--radius-xs)',
+                        borderRadius: '0.35rem',
                         fontSize: '0.7rem',
                         fontWeight: 700,
                         padding: '0.22rem 0.36rem',
-                        cursor: 'pointer',
-                        fontFamily: 'inherit'
+                        cursor: 'pointer'
                       }}
                     >
                       ↑
@@ -631,12 +570,11 @@ export default function Sidebar({
                         border: '1px solid var(--border-color)',
                         backgroundColor: 'var(--bg-tertiary)',
                         color: 'var(--text-secondary)',
-                        borderRadius: 'var(--radius-xs)',
+                        borderRadius: '0.35rem',
                         fontSize: '0.7rem',
                         fontWeight: 700,
                         padding: '0.22rem 0.36rem',
-                        cursor: 'pointer',
-                        fontFamily: 'inherit'
+                        cursor: 'pointer'
                       }}
                     >
                       ↓
@@ -650,12 +588,11 @@ export default function Sidebar({
                         border: '1px solid var(--border-color)',
                         backgroundColor: 'var(--bg-tertiary)',
                         color: 'var(--text-secondary)',
-                        borderRadius: 'var(--radius-xs)',
+                        borderRadius: '0.35rem',
                         fontSize: '0.7rem',
                         fontWeight: 700,
                         padding: '0.22rem 0.36rem',
-                        cursor: 'pointer',
-                        fontFamily: 'inherit'
+                        cursor: 'pointer'
                       }}
                     >
                       ⤓
@@ -669,12 +606,11 @@ export default function Sidebar({
                         border: '1px solid var(--border-color)',
                         backgroundColor: 'var(--bg-tertiary)',
                         color: 'var(--text-secondary)',
-                        borderRadius: 'var(--radius-xs)',
+                        borderRadius: '0.35rem',
                         fontSize: '0.7rem',
-                        fontWeight: 600,
+                        fontWeight: 700,
                         padding: '0.22rem 0.4rem',
-                        cursor: 'pointer',
-                        fontFamily: 'inherit'
+                        cursor: 'pointer'
                       }}
                     >
                       Edit
@@ -685,15 +621,14 @@ export default function Sidebar({
                       aria-label={`Delete saved view ${preset.label}`}
                       onClick={() => onDeleteSavedFilter(preset.id)}
                       style={{
-                        border: '1px solid var(--danger-soft)',
-                        backgroundColor: 'var(--danger-soft)',
-                        color: 'var(--danger-fg)',
-                        borderRadius: 'var(--radius-xs)',
+                        border: '1px solid #fecaca',
+                        backgroundColor: 'transparent',
+                        color: 'var(--button-danger)',
+                        borderRadius: '0.35rem',
                         fontSize: '0.72rem',
-                        fontWeight: 600,
+                        fontWeight: 700,
                         padding: '0.22rem 0.4rem',
-                        cursor: 'pointer',
-                        fontFamily: 'inherit'
+                        cursor: 'pointer'
                       }}
                     >
                       x
@@ -708,9 +643,8 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* Topic list */}
       <div
-        style={{ flex: 1, overflowY: 'auto', padding: '0.5rem' }}
+        style={{ flex: 1, overflowY: 'auto' }}
         role="listbox"
         aria-label="Available topics"
         aria-activedescendant={activeTopicOptionId}
@@ -721,9 +655,9 @@ export default function Sidebar({
         id={topicsListboxId}
       >
         {sortedTopics.length === 0 ? (
-          <div role="status" aria-live="polite" style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-            <div style={{ marginBottom: '0.75rem', opacity: 0.5 }}><FolderIcon /></div>
-            <p style={{ margin: 0, fontSize: '0.875rem' }}>No topics found</p>
+          <div role="status" aria-live="polite" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+            <div style={{ marginBottom: '1rem' }}><FolderIcon /></div>
+            <p>No topics found</p>
           </div>
         ) : (
           sortedTopics.map(topic => (
@@ -731,27 +665,25 @@ export default function Sidebar({
               key={topic.id}
               onClick={() => { setSelectedTopic(topic); setPreviewUrl(''); focusTopicById(topic.id); }}
               style={{
-                padding: '0.625rem 0.75rem',
+                padding: '0.45rem 0.7rem',
                 cursor: 'pointer',
-                background: selectedTopic?.id === topic.id
-                  ? 'var(--topic-selected)'
-                  : topic.archived
-                    ? 'var(--bg-tertiary)'
-                    : 'transparent',
-                borderRadius: 'var(--radius-md)',
+                borderBottom: '1px solid var(--border-light)',
+                background: selectedTopic?.id === topic.id ? 'var(--topic-selected)' : topic.archived ? 'var(--bg-tertiary)' : 'var(--sidebar-bg)',
+                borderLeft: selectedTopic?.id === topic.id ? '4px solid var(--topic-border-selected)' : topic.pinned ? '4px solid #f59e0b' : 'none',
                 opacity: topic.archived ? 0.7 : 1,
-                transition: 'background var(--transition-fast)',
-                position: 'relative',
-                marginBottom: '0.125rem'
+                transition: 'all var(--transition-fast)',
+                position: 'relative'
               }}
               onMouseEnter={(e) => {
                 if (selectedTopic?.id !== topic.id) {
-                  e.currentTarget.style.background = 'var(--topic-hover)';
+                  e.currentTarget.style.backgroundColor = 'var(--topic-hover)';
+                  e.currentTarget.style.transform = 'translateX(2px)';
                 }
               }}
               onMouseLeave={(e) => {
                 if (selectedTopic?.id !== topic.id) {
-                  e.currentTarget.style.background = topic.archived ? 'var(--bg-tertiary)' : 'transparent';
+                  e.currentTarget.style.backgroundColor = topic.archived ? 'var(--bg-tertiary)' : 'var(--sidebar-bg)';
+                  e.currentTarget.style.transform = 'translateX(0)';
                 }
               }}
               role="option"
@@ -776,31 +708,17 @@ export default function Sidebar({
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.2rem' }}>
-                    {topic.pinned && (
-                      <span style={{ color: 'var(--pin)', flexShrink: 0, display: 'flex' }}>
-                        <PinIcon filled />
-                      </span>
-                    )}
-                    <h3 style={{
-                      fontWeight: 600,
-                      color: 'var(--text-primary)',
-                      margin: 0,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      fontSize: '0.875rem',
-                      lineHeight: 1.3
-                    }}>{topic.title}</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    {topic.pinned && <span style={{ color: 'var(--highlight)' }}><PinIcon filled /></span>}
+                    <h3 style={{ fontWeight: '600', color: 'var(--text-primary)', marginBottom: '0.08rem', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.95rem' }}>{topic.title}</h3>
                   </div>
-
                   {matchSnippets && matchSnippets[topic.id] && (() => {
                     const { before, match, after } = matchSnippets[topic.id];
                     return (
                       <p
                         data-testid={`search-snippet-${topic.id}`}
                         style={{
-                          margin: '0.15rem 0 0.3rem',
+                          margin: '0.2rem 0 0 0',
                           fontSize: '0.7rem',
                           color: 'var(--text-muted)',
                           lineHeight: 1.5,
@@ -810,8 +728,8 @@ export default function Sidebar({
                         }}
                       >
                         {before}<mark style={{
-                          backgroundColor: 'var(--warning-soft)',
-                          color: 'var(--warning-fg)',
+                          backgroundColor: 'var(--highlight-soft)',
+                          color: 'var(--text-primary)',
                           borderRadius: '0.2rem',
                           padding: '0 0.1rem',
                           fontWeight: 700
@@ -819,43 +737,34 @@ export default function Sidebar({
                       </p>
                     );
                   })()}
-
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginTop: '0.3rem' }}>
-                    <span style={{
-                      fontSize: '0.7rem',
-                      backgroundColor: 'var(--accent-soft)',
-                      color: 'var(--accent-fg)',
-                      padding: '0.15rem 0.45rem',
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.35rem' }}>
+                    <span style={{ 
+                      fontSize: '0.75rem', 
+                      backgroundColor: selectedTopic?.id === topic.id ? 'var(--accent-soft)' : 'var(--bg-tertiary)',
+                      color: selectedTopic?.id === topic.id ? 'var(--accent-strong)' : 'var(--text-tertiary)',
+                      padding: '0.25rem 0.5rem', 
                       borderRadius: 'var(--radius-full)',
-                      fontWeight: 600
+                      fontWeight: '500',
+                      boxShadow: 'var(--shadow-xs)'
                     }}>{topic.category}</span>
                     {topic.tags && topic.tags.map(tag => (
-                      <span key={tag} style={{
-                        fontSize: '0.68rem',
+                      <span key={tag} style={{ 
+                        fontSize: '0.7rem', 
                         backgroundColor: 'var(--bg-tertiary)',
                         color: 'var(--text-tertiary)',
-                        padding: '0.15rem 0.4rem',
+                        border: '1px solid var(--border-color)',
+                        padding: '0.2rem 0.45rem', 
                         borderRadius: 'var(--radius-full)',
-                        fontWeight: 500,
-                        border: '1px solid var(--border-color)'
+                        fontWeight: '500',
+                        boxShadow: 'var(--shadow-xs)'
                       }}>#{tag}</span>
                     ))}
                   </div>
                 </div>
-
-                <div style={{ display: 'flex', gap: '0.1rem', marginLeft: '0.4rem', flexShrink: 0 }}>
+                <div style={{ display: 'flex', gap: '0.25rem', marginLeft: '0.5rem' }}>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleTogglePin(topic.id); }}
-                    style={{
-                      color: topic.pinned ? 'var(--pin)' : 'var(--text-muted)',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: '0.2rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      borderRadius: 'var(--radius-xs)'
-                    }}
+                    style={{ color: topic.pinned ? 'var(--highlight)' : 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '0.15rem' }}
                     aria-label={topic.pinned ? `Unpin topic ${topic.title}` : `Pin topic ${topic.title}`}
                     title={topic.pinned ? 'Unpin' : 'Pin to top'}
                   >
@@ -863,16 +772,7 @@ export default function Sidebar({
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleArchiveTopic(topic.id); }}
-                    style={{
-                      color: topic.archived ? 'var(--warning)' : 'var(--text-muted)',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: '0.2rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      borderRadius: 'var(--radius-xs)'
-                    }}
+                    style={{ color: topic.archived ? 'var(--highlight)' : 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '0.15rem' }}
                     aria-label={topic.archived ? `Restore topic ${topic.title}` : `Archive topic ${topic.title}`}
                     title={topic.archived ? 'Restore' : 'Archive'}
                   >
@@ -880,16 +780,7 @@ export default function Sidebar({
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDeleteTopic(topic.id); }}
-                    style={{
-                      color: 'var(--danger)',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: '0.2rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      borderRadius: 'var(--radius-xs)'
-                    }}
+                    style={{ color: 'var(--button-danger)', background: 'none', border: 'none', cursor: 'pointer', padding: '0.15rem' }}
                     aria-label={`Delete topic ${topic.title}`}
                     title={`Delete topic ${topic.title}`}
                   >
@@ -897,12 +788,7 @@ export default function Sidebar({
                   </button>
                 </div>
               </div>
-              <p style={{
-                fontSize: '0.68rem',
-                color: 'var(--text-muted)',
-                marginTop: '0.25rem',
-                marginBottom: 0
-              }}>Modified: {new Date(topic.lastModified).toLocaleDateString()}</p>
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>Modified: {new Date(topic.lastModified).toLocaleDateString()}</p>
             </div>
           ))
         )}

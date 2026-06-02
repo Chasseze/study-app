@@ -1,8 +1,21 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { getDatabase, ref, set, get, remove, onValue, off } from 'firebase/database';
+import { getDatabase, ref, child, update, get, remove, onValue, off } from 'firebase/database';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 
-// Expect REACT_APP_FIREBASE_CONFIG as a JSON string or REACT_APP_FIREBASE_DB_URL as fallback
+// ---------------------------------------------------------------------------
+// Cloud-only storage (Firebase Realtime Database).
+//
+// Hard rules that prevent the data-loss class of bugs we hit before:
+//   1. Data ONLY lives at users/<uid>/topics. There is NO anonymous "device"
+//      path — anonymous device IDs were ephemeral and orphaned people's notes.
+//   2. We NEVER call set() on the whole topics collection. Writes are per-topic
+//      via update()/remove(), so a transient empty/seed state can never wipe
+//      the entire collection.
+//   3. Reads/writes require an authenticated user. If nobody is signed in,
+//      loads return null and writes are no-ops — so we never persist into the
+//      wrong place.
+// ---------------------------------------------------------------------------
+
 const CONFIG_JSON = process.env.REACT_APP_FIREBASE_CONFIG || '';
 const DB_URL = process.env.REACT_APP_FIREBASE_DB_URL || '';
 
@@ -28,7 +41,7 @@ function getAppInstance() {
   }
   const cfg = parseConfig();
   if (!cfg && !DB_URL) {
-    console.warn('firebaseSdkStorage: no firebase config found. Set REACT_APP_FIREBASE_CONFIG or REACT_APP_FIREBASE_DB_URL');
+    console.warn('firebaseSdkStorage: no firebase config found.');
     return null;
   }
   const initCfg = cfg || { databaseURL: DB_URL };
@@ -41,92 +54,116 @@ function getAppInstance() {
   }
 }
 
-// Get current user synchronously (if available)
 function getCurrentUser() {
   const app = getAppInstance();
   if (!app) return null;
   try {
-    const auth = getAuth(app);
-    return auth.currentUser;
+    return getAuth(app).currentUser;
   } catch (e) {
     return null;
   }
 }
 
-// Get the database path for topics (user-specific if authenticated)
+// Topics live under the signed-in user only. Returns null when not authed.
 function getTopicsPath() {
   const user = getCurrentUser();
-  if (user) {
-    return `users/${user.uid}/topics`;
-  }
-  // For unauthenticated users, use a device-specific ID stored in localStorage
-  let deviceId = localStorage.getItem('firebase_device_id');
-  if (!deviceId) {
-    deviceId = 'device_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
-    localStorage.setItem('firebase_device_id', deviceId);
-  }
-  return `devices/${deviceId}/topics`;
+  if (!user) return null;
+  return `users/${user.uid}/topics`;
 }
 
-// Store listeners for real-time updates
-let activeListener = null;
-let activeListenerPath = null;
+// Firebase keys can't be bare numbers in a clean way; prefix numeric ids.
+function keyForId(id) {
+  const raw = id != null ? String(id) : '';
+  if (!raw) return null;
+  return /^\d/.test(raw) ? `topic_${raw}` : raw;
+}
+
 let lastSyncTime = null;
+let activeRef = null;
+
+function normalizeSnapshotValue(val) {
+  let topics = [];
+  if (Array.isArray(val)) {
+    topics = val;
+  } else if (val && typeof val === 'object') {
+    topics = Object.values(val);
+  }
+  return topics.filter(t => t != null && typeof t === 'object' && t.id != null);
+}
 
 async function loadTopics() {
   const app = getAppInstance();
-  if (!app) {
-    return null;
-  }
+  if (!app) return null;
+  const basePath = getTopicsPath();
+  if (!basePath) return null; // not signed in — nothing to load
   try {
     const db = getDatabase(app);
-    const basePath = getTopicsPath();
     const snapshot = await get(ref(db, basePath));
     lastSyncTime = Date.now();
-    
-    if (!snapshot.exists()) {
-      return null;
-    }
-    const val = snapshot.val();
-    let topics = [];
-    if (Array.isArray(val)) {
-      topics = val;
-    } else if (val && typeof val === 'object') {
-      topics = Object.values(val);
-    }
-    // Filter out null/undefined values that can exist in Firebase arrays
-    return topics.filter(t => t != null && typeof t === 'object' && t.id != null);
+    if (!snapshot.exists()) return []; // signed in, no topics yet
+    return normalizeSnapshotValue(snapshot.val());
   } catch (e) {
     console.warn('firebaseSdkStorage: failed to load topics', e);
     return null;
   }
 }
 
-async function saveTopics(topics) {
+// Write a single topic (merge). Never touches sibling topics.
+async function saveTopic(topic) {
   const app = getAppInstance();
-  if (!app) {
-    return false;
-  }
-  
-  if (!topics || !Array.isArray(topics)) {
-    return false;
-  }
-  
+  if (!app || !topic || topic.id == null) return false;
+  const basePath = getTopicsPath();
+  if (!basePath) return false;
+  const key = keyForId(topic.id);
+  if (!key) return false;
   try {
     const db = getDatabase(app);
-    const basePath = getTopicsPath();
-    
-    // Convert array to object with topic IDs as keys for better Firebase structure
-    // Prefix numeric IDs with 'topic_' to ensure valid Firebase keys
-    const topicsObject = {};
-    topics.forEach((topic, index) => {
-      const rawKey = topic.id != null ? String(topic.id) : `idx_${index}`;
-      // Firebase keys can't start with numbers in some cases, so prefix them
-      const key = /^\d/.test(rawKey) ? `topic_${rawKey}` : rawKey;
-      topicsObject[key] = { ...topic, id: topic.id }; // Preserve original id in the data
+    await update(child(ref(db), `${basePath}/${key}`), { ...topic, id: topic.id });
+    lastSyncTime = Date.now();
+    return true;
+  } catch (e) {
+    console.warn('firebaseSdkStorage: failed to save topic', e);
+    return false;
+  }
+}
+
+// Remove a single topic.
+async function removeTopic(id) {
+  const app = getAppInstance();
+  if (!app || id == null) return false;
+  const basePath = getTopicsPath();
+  if (!basePath) return false;
+  const key = keyForId(id);
+  if (!key) return false;
+  try {
+    const db = getDatabase(app);
+    await remove(ref(db, `${basePath}/${key}`));
+    lastSyncTime = Date.now();
+    return true;
+  } catch (e) {
+    console.warn('firebaseSdkStorage: failed to remove topic', e);
+    return false;
+  }
+}
+
+// Bulk write used for imports/migrations. Implemented as a multi-location
+// update() so it MERGES (adds/updates listed topics) and can never delete
+// topics that aren't in the list. Deletions must go through removeTopic.
+async function saveTopics(topics) {
+  const app = getAppInstance();
+  if (!app || !Array.isArray(topics)) return false;
+  const basePath = getTopicsPath();
+  if (!basePath) return false;
+  try {
+    const db = getDatabase(app);
+    const payload = {};
+    topics.forEach((topic) => {
+      if (!topic || topic.id == null) return;
+      const key = keyForId(topic.id);
+      if (key) payload[`${basePath}/${key}`] = { ...topic, id: topic.id };
     });
-    
-    await set(ref(db, basePath), topicsObject);
+    if (Object.keys(payload).length === 0) return true;
+    await update(ref(db), payload);
     lastSyncTime = Date.now();
     return true;
   } catch (e) {
@@ -137,13 +174,11 @@ async function saveTopics(topics) {
 
 async function clearTopics() {
   const app = getAppInstance();
-  if (!app) {
-    console.warn('firebaseSdkStorage: no firebase config found');
-    return false;
-  }
+  if (!app) return false;
+  const basePath = getTopicsPath();
+  if (!basePath) return false;
   try {
     const db = getDatabase(app);
-    const basePath = getTopicsPath();
     await remove(ref(db, basePath));
     lastSyncTime = Date.now();
     return true;
@@ -153,47 +188,31 @@ async function clearTopics() {
   }
 }
 
-// Subscribe to real-time updates from Firebase
 function subscribeToChanges(callback) {
   const app = getAppInstance();
   if (!app) return () => {};
-  
+  const basePath = getTopicsPath();
+  if (!basePath) return () => {}; // only subscribe when authed
   try {
     const db = getDatabase(app);
-    const basePath = getTopicsPath();
     const topicsRef = ref(db, basePath);
-    
-    // Unsubscribe from previous listener if path changed
-    if (activeListener && activeListenerPath !== basePath) {
-      off(ref(db, activeListenerPath));
-      activeListener = null;
+
+    if (activeRef) {
+      off(activeRef);
+      activeRef = null;
     }
-    
-    activeListenerPath = basePath;
-    activeListener = onValue(topicsRef, (snapshot) => {
+    activeRef = topicsRef;
+
+    onValue(topicsRef, (snapshot) => {
       lastSyncTime = Date.now();
-      if (!snapshot.exists()) {
-        callback([]);
-        return;
-      }
-      const val = snapshot.val();
-      let topics = [];
-      if (Array.isArray(val)) {
-        topics = val;
-      } else if (val && typeof val === 'object') {
-        topics = Object.values(val);
-      }
-      // Filter out null/undefined values that can exist in Firebase arrays
-      const validTopics = topics.filter(t => t != null && typeof t === 'object' && t.id != null);
-      callback(validTopics);
+      callback(snapshot.exists() ? normalizeSnapshotValue(snapshot.val()) : []);
     }, (error) => {
       console.warn('firebaseSdkStorage: realtime listener error', error);
     });
-    
+
     return () => {
       off(topicsRef);
-      activeListener = null;
-      activeListenerPath = null;
+      if (activeRef === topicsRef) activeRef = null;
     };
   } catch (e) {
     console.warn('firebaseSdkStorage: failed to subscribe', e);
@@ -201,20 +220,16 @@ function subscribeToChanges(callback) {
   }
 }
 
-// Listen for auth state changes to reload data when user signs in/out
 function onAuthChange(callback) {
   const app = getAppInstance();
   if (!app) return () => {};
-  
   try {
-    const auth = getAuth(app);
-    return onAuthStateChanged(auth, callback);
+    return onAuthStateChanged(getAuth(app), callback);
   } catch (e) {
     return () => {};
   }
 }
 
-// Get sync status
 function getSyncStatus() {
   const user = getCurrentUser();
   return {
@@ -226,14 +241,15 @@ function getSyncStatus() {
   };
 }
 
-// Check if Firebase is configured
 function isConfigured() {
   return !!(CONFIG_JSON || DB_URL);
 }
 
-const firebaseSdkAdapter = { 
-  loadTopics, 
-  saveTopics, 
+const firebaseSdkAdapter = {
+  loadTopics,
+  saveTopic,
+  removeTopic,
+  saveTopics,
   clearTopics,
   subscribeToChanges,
   onAuthChange,

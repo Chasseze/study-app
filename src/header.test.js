@@ -1,19 +1,17 @@
 import { render, screen, within } from '@testing-library/react';
 import App from './App';
 
-test('header has Nigeria green border', () => {
+test('header renders the editorial wordmark', () => {
   render(<App />);
   const header = screen.getByTestId('app-header');
   expect(header).toBeInTheDocument();
-  const styleAttr = header.getAttribute('style') || '';
-  expect(styleAttr).toContain('3px solid #008751');
+  // Wordmark is present in the redesigned editorial header.
+  expect(within(header).getByRole('heading', { name: /personal study note/i })).toBeInTheDocument();
 });
 
-test('header displays storage selector', () => {
+test('header shows the cloud sync indicator', () => {
   render(<App />);
-  const select = screen.getByLabelText(/choose where notes are stored/i);
-  expect(select).toBeInTheDocument();
-  expect(select).toHaveValue('firebase');
-  expect(within(select).getByText(/offline storage/i)).toBeInTheDocument();
-  expect(within(select).getByText(/cloud sync/i)).toBeInTheDocument();
+  const header = screen.getByTestId('app-header');
+  // Cloud-only storage: the header surfaces sync status rather than a storage picker.
+  expect(within(header).getByText(/cloud|syncing/i)).toBeInTheDocument();
 });
