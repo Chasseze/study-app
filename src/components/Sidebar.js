@@ -202,76 +202,89 @@ export default function Sidebar({
         </select>
       </div>
 
-      {/* Tag filter chips — always shown for discoverability */}
-      {(
-        <div style={{ padding: '0.5rem 0.7rem', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
-          <p style={{ margin: '0 0 0.35rem', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Filter by tag</p>
-          {(!allTags || allTags.length === 0) && (
-            <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-              No tags yet. Add tags while editing a note.
-            </p>
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-            {(allTags || []).map(tag => (
-              <div key={tag} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <button
-                  data-testid={`tag-filter-${tag}`}
-                  onClick={() => setSelectedTagFilter(selectedTagFilter === tag ? null : tag)}
-                  style={{
-                    flex: 1,
-                    textAlign: 'left',
-                    fontSize: '0.72rem',
-                    fontWeight: 600,
-                    padding: '0.2rem 0.5rem',
-                    borderRadius: '999px',
-                    border: selectedTagFilter === tag ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-                    backgroundColor: selectedTagFilter === tag ? 'var(--accent)' : 'var(--bg-secondary)',
-                    color: selectedTagFilter === tag ? '#fffdf8' : 'var(--text-secondary)',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s'
-                  }}
-                >
-                  #{tag}
-                </button>
+      {/* Tag filter — compact dropdown so it stays tidy as tags grow */}
+      <div style={{ padding: '0.5rem 0.7rem', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}>
+        <label
+          htmlFor="tag-filter-select"
+          style={{ display: 'block', margin: '0 0 0.3rem', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}
+        >
+          Filter by tag
+        </label>
+        {(!allTags || allTags.length === 0) ? (
+          <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+            No tags yet. Add tags while editing a note.
+          </p>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+            <select
+              id="tag-filter-select"
+              data-testid="tag-filter-select"
+              value={selectedTagFilter || ''}
+              onChange={(e) => setSelectedTagFilter(e.target.value || null)}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                padding: '0.4rem 0.55rem',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                backgroundColor: 'var(--bg-secondary)',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                outline: 'none'
+              }}
+            >
+              <option value="">All tags ({allTags.length})</option>
+              {allTags.map(tag => (
+                <option key={tag} value={tag}>#{tag}</option>
+              ))}
+            </select>
+            {selectedTagFilter && (
+              <>
                 <button
                   type="button"
-                  data-testid={`tag-rename-${tag}`}
-                  onClick={() => onRenameTagGlobally(tag)}
+                  data-testid={`tag-rename-${selectedTagFilter}`}
+                  onClick={() => onRenameTagGlobally(selectedTagFilter)}
+                  title={`Rename #${selectedTagFilter}`}
+                  aria-label={`Rename tag ${selectedTagFilter}`}
                   style={{
                     border: '1px solid var(--border-color)',
-                    backgroundColor: 'var(--bg-tertiary)',
+                    backgroundColor: 'var(--bg-secondary)',
                     color: 'var(--text-secondary)',
-                    borderRadius: '0.35rem',
-                    fontSize: '0.68rem',
-                    fontWeight: 700,
-                    padding: '0.18rem 0.35rem',
-                    cursor: 'pointer'
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.78rem',
+                    padding: '0.32rem 0.4rem',
+                    cursor: 'pointer',
+                    lineHeight: 1
                   }}
                 >
-                  Rename
+                  ✎
                 </button>
                 <button
                   type="button"
-                  data-testid={`tag-delete-${tag}`}
-                  onClick={() => onDeleteTagGlobally(tag)}
+                  data-testid={`tag-delete-${selectedTagFilter}`}
+                  onClick={() => onDeleteTagGlobally(selectedTagFilter)}
+                  title={`Delete #${selectedTagFilter}`}
+                  aria-label={`Delete tag ${selectedTagFilter}`}
                   style={{
-                    border: '1px solid #fecaca',
+                    border: '1px solid var(--clay-border)',
                     backgroundColor: 'transparent',
                     color: 'var(--button-danger)',
-                    borderRadius: '0.35rem',
-                    fontSize: '0.68rem',
-                    fontWeight: 700,
-                    padding: '0.18rem 0.35rem',
-                    cursor: 'pointer'
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.78rem',
+                    padding: '0.32rem 0.4rem',
+                    cursor: 'pointer',
+                    lineHeight: 1
                   }}
                 >
-                  Delete
+                  ✕
                 </button>
-              </div>
-            ))}
+              </>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Archive toggle */}
       {archivedCount > 0 && (

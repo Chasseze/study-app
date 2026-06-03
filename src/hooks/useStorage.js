@@ -93,12 +93,10 @@ export default function useStorage(onTopicsLoaded) {
 
       if (Array.isArray(loaded)) {
         rememberSynced(loaded);
-        // Only replace in-memory topics with cloud data when the account
-        // actually has topics. An empty cloud (new account) leaves the
-        // in-memory seed in place so first-run users still see a welcome note.
-        if (loaded.length > 0) {
-          onTopicsLoadedRef.current(loaded);
-        }
+        // The cloud is authoritative: apply it even when empty. A new/empty
+        // account shows the empty state (no seed), and nothing gets
+        // auto-persisted that the user didn't create.
+        onTopicsLoadedRef.current(loaded);
       }
       resubscribeRealtime();
     } catch (error) {

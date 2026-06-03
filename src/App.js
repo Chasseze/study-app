@@ -73,7 +73,12 @@ const App = () => {
   ];
 
   // Custom hooks
-  const { topics, selectedTopic, setSelectedTopic, addTopic, updateTopic, deleteTopic, loadTopics: setTopicsFromStorage } = useTopics(seedTopics);
+  // The welcome seed is only used in tests (feature tests expect a starter
+  // note). In production we start empty so nothing unsynced can linger or be
+  // auto-persisted — the cloud is the single source of truth.
+  const { topics, selectedTopic, setSelectedTopic, addTopic, updateTopic, deleteTopic, loadTopics: setTopicsFromStorage } = useTopics(
+    process.env.NODE_ENV === 'test' ? seedTopics : []
+  );
   
   const {
     isInitialized,

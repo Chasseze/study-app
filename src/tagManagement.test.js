@@ -17,18 +17,23 @@ test('renames and deletes tags globally from sidebar controls', async () => {
   await userEvent.type(tagInput, 'science{enter}');
   await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
+  // Select the tag in the filter dropdown so its management controls appear.
+  const tagSelect = await screen.findByTestId('tag-filter-select');
+  await userEvent.selectOptions(tagSelect, 'science');
+
   // Rename tag globally.
   await userEvent.click(await screen.findByTestId('tag-rename-science'));
   expect(promptSpy).toHaveBeenCalled();
 
-  const renamedFilter = await screen.findByTestId('tag-filter-science-renamed');
-  expect(renamedFilter).toBeInTheDocument();
+  // The dropdown should now offer the renamed tag.
+  expect(await within(tagSelect).findByRole('option', { name: '#science-renamed' })).toBeInTheDocument();
 
-  // Delete tag globally.
-  await userEvent.click(screen.getByTestId('tag-delete-science-renamed'));
+  // Delete tag globally (selection followed the rename).
+  await userEvent.click(await screen.findByTestId('tag-delete-science-renamed'));
   expect(confirmSpy).toHaveBeenCalled();
 
-  expect(screen.queryByTestId('tag-filter-science-renamed')).not.toBeInTheDocument();
+  // With no tags left, the dropdown is replaced by the empty-state hint.
+  expect(screen.queryByTestId('tag-filter-select')).not.toBeInTheDocument();
 
   const listbox = screen.getByRole('listbox', { name: /available topics/i });
   expect(within(listbox).getByText('Biology Note')).toBeInTheDocument();

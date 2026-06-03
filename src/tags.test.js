@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './App';
 
@@ -30,11 +30,13 @@ test('can add tags to a note and filter sidebar by tag', async () => {
   // Save the note
   await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
-  // Sidebar tag filter chip should appear (topics state updated)
-  expect(await screen.findByTestId('tag-filter-science')).toBeInTheDocument();
+  // Sidebar tag filter dropdown should now list the new tag.
+  const tagSelect = await screen.findByTestId('tag-filter-select');
+  expect(within(tagSelect).getByRole('option', { name: '#science' })).toBeInTheDocument();
 
-  // Clicking filter chip should activate it
-  await userEvent.click(screen.getByTestId('tag-filter-science'));
+  // Selecting the tag should activate the filter.
+  await userEvent.selectOptions(tagSelect, 'science');
+  expect(tagSelect).toHaveValue('science');
 
   // The note should still be visible (it has the tag)
   // Note appears in both sidebar and content area — at least one should be visible

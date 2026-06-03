@@ -4,6 +4,11 @@ import './index.css';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import reportWebVitals from './reportWebVitals';
+import purgeLegacyLocalData from './lib/purgeLegacyLocalData';
+
+// Remove any stale on-device note storage from older versions before the app
+// mounts, so Firebase is the single source of truth.
+purgeLegacyLocalData();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
