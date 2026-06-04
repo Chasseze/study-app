@@ -17,7 +17,9 @@ export default function Header({
   authUser,
   onSignOut,
   isSyncing,
-  lastSyncTime
+  lastSyncTime,
+  isSidebarCollapsed,
+  onToggleSidebar
 }) {
   const iconBtn = {
     background: 'transparent',
@@ -52,6 +54,31 @@ export default function Header({
     >
       {/* Wordmark */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem' }}>
+        {onToggleSidebar && (
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            aria-pressed={!isSidebarCollapsed}
+            title={isSidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+            aria-label={isSidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+            style={{ ...iconBtn, marginRight: '0.1rem' }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--bg-hover)';
+              e.currentTarget.style.color = 'var(--text-primary)';
+              e.currentTarget.style.borderColor = 'var(--accent-border)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = 'var(--text-tertiary)';
+              e.currentTarget.style.borderColor = 'var(--border-color)';
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <line x1="9" y1="4" x2="9" y2="20" />
+            </svg>
+          </button>
+        )}
         <div
           aria-hidden="true"
           style={{

@@ -144,6 +144,13 @@ const App = () => {
       return 'expanded';
     }
   });
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('studyApp.sidebarCollapsed.v1') === '1';
+    } catch (e) {
+      return false;
+    }
+  });
   // Template state
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -552,6 +559,18 @@ const App = () => {
       // no-op when storage is unavailable
     }
   }, [savedViewsDensity]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('studyApp.sidebarCollapsed.v1', isSidebarCollapsed ? '1' : '0');
+    } catch (e) {
+      // no-op when storage is unavailable
+    }
+  }, [isSidebarCollapsed]);
+
+  const toggleSidebar = useCallback(() => {
+    setIsSidebarCollapsed((prev) => !prev);
+  }, []);
 
   const handleToggleSavedViewsDensity = useCallback(() => {
     setSavedViewsDensity((current) => (current === 'expanded' ? 'compact' : 'expanded'));
@@ -1397,6 +1416,8 @@ const App = () => {
           onSignOut={handleSignOut}
           isSyncing={isSyncing}
           lastSyncTime={lastSyncTime}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
         />
 
         {/* Workspace Insights */}
@@ -1541,6 +1562,7 @@ const App = () => {
             overflow: 'hidden'
           }}
         >
+          {!isSidebarCollapsed && (
           <Sidebar
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
@@ -1590,6 +1612,7 @@ const App = () => {
             onToggleSavedViewsDensity={handleToggleSavedViewsDensity}
             matchSnippets={matchSnippets}
           />
+          )}
 
           <div style={{
             flex: 1,
